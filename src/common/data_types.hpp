@@ -42,4 +42,12 @@ struct t_dcomp
 };
 typedef struct t_dcomp t_dcomp;
 
+template<typename Type>
+struct t_point
+{
+    Type x;
+    Type y;
+    Type z;
+};
+
 #endif
