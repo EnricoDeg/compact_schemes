@@ -43,17 +43,19 @@ static constexpr double ab10    =  3.0 / 4.0;
 
 
 static constexpr unsigned int lmd = 8;
+static constexpr unsigned int mbci = 4;
 static constexpr unsigned int NumberOfVariables = 5;
 static constexpr unsigned int NumberOfSpatialDims = 3;
+static constexpr unsigned int NumberOfFaces = 2;
 
 // boundary contidions
-static constexpr unsigned int BC_NON_REFLECTIVE   = 10;
-static constexpr unsigned int BC_WALL_INVISCID    = 20;
-static constexpr unsigned int BC_WALL_VISCOUS     = 25;
-static constexpr unsigned int BC_INTER_CURV       = 30;
-static constexpr unsigned int BC_INTER_STRAIGHT   = 35;
-static constexpr unsigned int BC_INTER_SUBDOMAINS = 40;
-static constexpr unsigned int BC_PERIODIC         = 45;
+static constexpr int BC_NON_REFLECTIVE   = 10;
+static constexpr int BC_WALL_INVISCID    = 20;
+static constexpr int BC_WALL_VISCOUS     = 25;
+static constexpr int BC_INTER_CURV       = 30;
+static constexpr int BC_INTER_STRAIGHT   = 35;
+static constexpr int BC_INTER_SUBDOMAINS = 40;
+static constexpr int BC_PERIODIC         = 45;
 
 // physics
 static constexpr double gam          = 1.4;
