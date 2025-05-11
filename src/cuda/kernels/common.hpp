@@ -47,4 +47,17 @@ CANARD_DEVICE void MatVecMul(Type *mat, Type * vec, Type * res)
     });
 }
 
+template<typename Type>
+CANARD_DEVICE inline void atomicMax(Type * addr, Type val) {
+    if (*addr >= val) return;
+
+    unsigned int *const addr_as_ui = (unsigned int *)addr;
+    unsigned int old = *addr_as_ui, assumed;
+    do {
+        assumed = old;
+        if (__uint_as_float(assumed) >= val) break;
+        old = atomicCAS(addr_as_ui, assumed, __float_as_uint(val));
+    } while (assumed != old);
+}
+
 #endif
