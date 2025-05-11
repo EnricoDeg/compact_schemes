@@ -30,7 +30,7 @@
 #ifndef CANARD_COMMON_UTILS_HPP
 #define CANARD_COMMON_UTILS_HPP
 
-int div_ceil(int numerator, int denominator)
+inline int div_ceil(int numerator, int denominator)
 {
     return (numerator % denominator != 0) ?
            (numerator / denominator+ 1  ) :
