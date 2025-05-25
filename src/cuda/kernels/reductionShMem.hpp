@@ -67,10 +67,10 @@ void warpReduceShMem(Type* sdata, unsigned int tid) {
 
 template<
 unsigned int blockSize,
-typename Type,
+typename Type
 >
 CANARD_DEVICE
-void blockReduceShMemUnroll(Type* sdata, unsigned int tid, op_t<T> &Op) {
+void blockReduceShMemUnroll(Type* sdata, unsigned int tid) {
 
     if (blockSize >= 1024) {
         if (tid < 512) sdata[tid] = max(sdata[tid], sdata[tid + 512]);
@@ -90,7 +90,7 @@ void blockReduceShMemUnroll(Type* sdata, unsigned int tid, op_t<T> &Op) {
     }
 
     if (tid < 32)
-        warpReduceShMem<blockSize, T, op_t>(sdata, tid, Op);
+        warpReduceShMem<blockSize, Type>(sdata, tid);
 }
 
 #endif
