@@ -49,13 +49,13 @@ void free_cuda(Tdata *p)
 template<typename Tdata>
 void memcpy_cuda_h2d(Tdata *dst, Tdata *src, size_t nelements)
 {
-    cudaMemcpy(dst, src, nelements * sizeof(Tdata), cudaMemcpyHostToDevice);
+    check_cuda(cudaMemcpy(dst, src, nelements * sizeof(Tdata), cudaMemcpyHostToDevice));
 }
 
 template<typename Tdata>
 void memcpy_cuda_d2h(Tdata *dst, Tdata *src, size_t nelements)
 {
-    cudaMemcpy(dst, src, nelements * sizeof(Tdata), cudaMemcpyDeviceToHost);
+    check_cuda(cudaMemcpy(dst, src, nelements * sizeof(Tdata), cudaMemcpyDeviceToHost));
 }
 
 #endif
