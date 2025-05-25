@@ -38,10 +38,14 @@
 template<typename Type>
 struct gcbc_vgpr
 {
-    gcbc_vgpr()
+    CANARD_DEVICE gcbc_vgpr()
     {}
 
-    CANARD_DEVICE void eleme(Type *cm, Type qa1, Type * qa24, Type pp, Type *umf)
+    CANARD_DEVICE void eleme(Type *cm,
+                             Type qa1,
+                             Type *qa24,
+                             Type pp,
+                             t_point<Type> umf)
     {
         Type rhoi  = 1.0 / qa1;
         ao    = sqrt( gam * rhoi * pp );
@@ -51,10 +55,9 @@ struct gcbc_vgpr
         ve[2] = rhoi * qa24[2];
         hv2   = 0.5 * ( ve[0] * ve[0] + ve[1] * ve[1] + ve[2] * ve[2] );
         vn    = cm[0] * ve[0] + cm[1] * ve[1] + cm[2] * ve[2];
-        vs    = cm[0] * umf[0] + cm[1] * umf[1] + cm[2] * umf[2];
+        vs    = cm[0] * umf.x + cm[1] * umf.y + cm[2] * umf.z;
     }
 
-    template<typename Type>
     CANARD_DEVICE void xtr2q(Type *cm)
     {
         Type bo, co;
@@ -97,7 +100,6 @@ struct gcbc_vgpr
         xt[4][4] = xt[4][3] - co;
     }
 
-    template<typename Type>
     CANARD_DEVICE void xtq2r(Type *cm)
     {
         Type rv[3];
@@ -200,7 +202,7 @@ CANARD_GLOBAL void wall_inviscid_kernel(Type * qa,
 
 template<unsigned int Axis, typename Type>
 CANARD_GLOBAL void wall_viscous_kernel(Type * qa,
-                                       Type * umf,
+                                       t_point<Type> umf,
                                        int * npex,
                                        unsigned int face_offset,
                                        t_dcomp dcomp_info)
@@ -239,9 +241,9 @@ CANARD_GLOBAL void wall_viscous_kernel(Type * qa,
 
     Type velocity2 = qa1[idx] * qa1[idx] + qa2[idx] * qa2[idx] + qa3[idx] * qa3[idx];
     Type fctr      = ( 1 - npex[idx] ) * qa0[idx];
-    qa1[idx] = npex[idx] * qa1[idx] - fctr * umf[0];
-    qa2[idx] = npex[idx] * qa2[idx] - fctr * umf[0];
-    qa3[idx] = npex[idx] * qa3[idx] - fctr * umf[0];
+    qa1[idx] = npex[idx] * qa1[idx] - fctr * umf.x;
+    qa2[idx] = npex[idx] * qa2[idx] - fctr * umf.y;
+    qa3[idx] = npex[idx] * qa3[idx] - fctr * umf.z;
     qa4[idx] = npex[idx] * qa4[idx] + ( 1 - npex[idx] ) *
                ( hamhamm1 * qa0[idx] + 0.5 * velocity2 / qa0[idx] );
 }
@@ -253,7 +255,7 @@ CANARD_GLOBAL void gcbc_setup_kernel(Type * cm,
                                      Type * de,
                                      Type * pressure,
                                      Type * yaco,
-                                     Type * umf,
+                                     t_point<Type> umf,
                                      unsigned int face_id,
                                      unsigned int face_offset,
                                      unsigned int flag,
@@ -317,13 +319,13 @@ CANARD_GLOBAL void gcbc_setup_kernel(Type * cm,
     vel_vgpr[2] = qa3[idx];
 
     auto gcbc_params = gcbc_vgpr<Type>();
-    gcbc_params.eleme(&cm_vgpr[0], &qa[idx], &vel_vgpr[0],
-                      &pressure[idx], umf);
+    gcbc_params.eleme(&cm_vgpr[0], qa0[idx], &vel_vgpr[0],
+                      pressure[idx], umf);
 
     gcbc_params.xtq2r(&cm_vgpr[0]);
 
-    Type * cha_vgpr[NumberOfVariables];
-    for(unsigned int variable_id; variable_id < NumberOfVariables; ++variable_id)
+    Type cha_vgpr[NumberOfVariables];
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
     {
         cha_vgpr[variable_id] = yaco[idx] * (flag * drva_vgpr[variable_id] + 
                                              (1 - flag) * de[idx + variable_id * dcomp_info.lmx]);
@@ -336,6 +338,359 @@ CANARD_GLOBAL void gcbc_setup_kernel(Type * cm,
         unsigned int i = face_id * NumberOfVariables * face_size +
                 variable_id * face_size + face_idx;
         drva[i] = drva_vgpr[variable_id];
+    }
+}
+
+template<unsigned int Axis, typename Type>
+CANARD_GLOBAL void gcbc_update_non_reflective_kernel(Type * cm,
+                                                     Type * drva,
+                                                     Type * qa,
+                                                     Type * de,
+                                                     Type * pressure,
+                                                     Type * sbcc,
+                                                     t_point<Type> umf,
+                                                     unsigned int face_id,
+                                                     unsigned int face_offset,
+                                                     t_dcomp dcomp_info)
+{
+    Type * qa0 = qa;
+    Type * qa1 = qa +     dcomp_info.lmx;
+    Type * qa2 = qa + 2 * dcomp_info.lmx;
+    Type * qa3 = qa + 3 * dcomp_info.lmx;
+    Type * qa4 = qa + 4 * dcomp_info.lmx;
+
+    int thread_stride;
+    int block_stride;
+    int stride;
+    if(Axis == 0)
+    {
+        thread_stride = dcomp_info.lxi;
+        block_stride = dcomp_info.let * dcomp_info.lxi;
+        stride = 1;
+    }
+    else if(Axis == 1)
+    {
+        thread_stride = 1;
+        block_stride = dcomp_info.let * dcomp_info.lxi;
+        stride = dcomp_info.lxi;
+    }
+    else if(Axis == 2)
+    {
+        thread_stride = 1;
+        block_stride = dcomp_info.lxi;
+        stride = dcomp_info.let * dcomp_info.lxi;
+    }
+    unsigned int face_stride = get_face_stride<Axis>(dcomp_info);
+    unsigned int face_idx = blockIdx.y * face_stride + blockIdx.x;
+    unsigned int face_size = get_face_size<Axis>(dcomp_info);
+
+    int thread_idx = blockIdx.x * block_stride + threadIdx.x * thread_stride;
+    int idx = thread_idx + face_offset * stride;
+
+    // load cm to vgpr
+    Type cm_vgpr[NumberOfSpatialDims];
+    for(unsigned int dim_id = 0; dim_id < NumberOfSpatialDims; ++dim_id)
+    {
+        unsigned int i = face_id * NumberOfSpatialDims * face_size +
+            dim_id * face_size + face_idx;
+        cm_vgpr[dim_id] = cm[i];
+    }
+
+    // load drva to vgpr
+    Type drva_vgpr[NumberOfVariables];
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        unsigned int i = face_id * NumberOfVariables * face_size +
+                variable_id * face_size + face_idx;
+        drva_vgpr[variable_id] = drva[i];
+    }
+
+    Type vel_vgpr[NumberOfSpatialDims];
+    vel_vgpr[0] = qa1[idx];
+    vel_vgpr[1] = qa2[idx];
+    vel_vgpr[2] = qa3[idx];
+
+    auto gcbc_params = gcbc_vgpr<Type>();
+    gcbc_params.eleme(&cm_vgpr[0], qa0[idx], &vel_vgpr[0],
+                      pressure[idx], umf);
+
+    Type ra0 = 1 - 2 * face_id;
+
+    // compute cha in vgpr
+    Type cha_vgpr[NumberOfVariables];
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        cha_vgpr[variable_id] = drva_vgpr[variable_id];
+    }
+    if ( ra0 * ( gcbc_params.vn + gcbc_params.vs + gcbc_params.ao ) > 0 )
+    {
+        cha_vgpr[3] = 0;
+    }
+    if ( ra0 * ( gcbc_params.vn + gcbc_params.vs - gcbc_params.ao ) > 0 )
+    {
+        cha_vgpr[4] = 0;
+    }
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        cha_vgpr[variable_id] -= drva_vgpr[variable_id];
+    }
+
+    gcbc_params.xtr2q(&cm_vgpr[0]);
+
+    MatVecMul<NumberOfVariables>(&gcbc_params.xt[0][0], &cha_vgpr[0], &drva_vgpr[0]);
+
+    // update de
+    unsigned int out_idx;
+    int iq = 1 - 2 * face_id;
+    for(unsigned int ii = 0; ii < mbci; ++ii)
+    {
+        out_idx = idx + ii * iq * stride;
+        for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+        {
+            de[out_idx] += sbcc[out_idx] * drva_vgpr[variable_id];
+            out_idx += variable_id * dcomp_info.lmx;
+        }
+    }
+}
+
+template<unsigned int Axis, typename Type>
+CANARD_GLOBAL void gcbc_update_wall_kernel(Type * cm,
+                                           Type * drva,
+                                           Type * qa,
+                                           Type * de,
+                                           Type * pressure,
+                                           Type * sbcc,
+                                           t_point<Type> umf,
+                                           t_point<Type> dudtmf,
+                                           unsigned int face_id,
+                                           unsigned int face_offset,
+                                           Type dtwi,
+                                           t_dcomp dcomp_info)
+{
+    Type * qa0 = qa;
+    Type * qa1 = qa +     dcomp_info.lmx;
+    Type * qa2 = qa + 2 * dcomp_info.lmx;
+    Type * qa3 = qa + 3 * dcomp_info.lmx;
+    Type * qa4 = qa + 4 * dcomp_info.lmx;
+
+    int thread_stride;
+    int block_stride;
+    int stride;
+    if(Axis == 0)
+    {
+        thread_stride = dcomp_info.lxi;
+        block_stride = dcomp_info.let * dcomp_info.lxi;
+        stride = 1;
+    }
+    else if(Axis == 1)
+    {
+        thread_stride = 1;
+        block_stride = dcomp_info.let * dcomp_info.lxi;
+        stride = dcomp_info.lxi;
+    }
+    else if(Axis == 2)
+    {
+        thread_stride = 1;
+        block_stride = dcomp_info.lxi;
+        stride = dcomp_info.let * dcomp_info.lxi;
+    }
+    unsigned int face_stride = get_face_stride<Axis>(dcomp_info);
+    unsigned int face_idx = blockIdx.y * face_stride + blockIdx.x;
+    unsigned int face_size = get_face_size<Axis>(dcomp_info);
+
+    int thread_idx = blockIdx.x * block_stride + threadIdx.x * thread_stride;
+    int idx = thread_idx + face_offset * stride;
+
+    // load cm to vgpr
+    Type cm_vgpr[NumberOfSpatialDims];
+    for(unsigned int dim_id = 0; dim_id < NumberOfSpatialDims; ++dim_id)
+    {
+        unsigned int i = face_id * NumberOfSpatialDims * face_size +
+            dim_id * face_size + face_idx;
+        cm_vgpr[dim_id] = cm[i];
+    }
+
+    // load drva to vgpr
+    Type drva_vgpr[NumberOfVariables];
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        unsigned int i = face_id * NumberOfVariables * face_size +
+                variable_id * face_size + face_idx;
+        drva_vgpr[variable_id] = drva[i];
+    }
+
+    Type vel_vgpr[NumberOfSpatialDims];
+    vel_vgpr[0] = qa1[idx];
+    vel_vgpr[1] = qa2[idx];
+    vel_vgpr[2] = qa3[idx];
+
+    auto gcbc_params = gcbc_vgpr<Type>();
+    gcbc_params.eleme(&cm_vgpr[0], qa0[idx], &vel_vgpr[0],
+                      pressure[idx], umf);
+
+    Type ra0 = 1 - 2 * face_id;
+
+    // compute cha in vgpr
+    Type cha_vgpr[NumberOfVariables];
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        cha_vgpr[variable_id] = drva_vgpr[variable_id];
+    }
+    Type accum = cm_vgpr[0] * dudtmf.x +
+                 cm_vgpr[1] * dudtmf.y +
+                 cm_vgpr[2] * dudtmf.z;
+    cha_vgpr[3+face_id] = cha_vgpr[4-face_id] + 2 * ra0 * gcbc_params.aoi * qa0[idx] *
+                    ( accum + dtwi * ( gcbc_params.vn + gcbc_params.vs ) );
+
+    gcbc_params.xtr2q(&cm_vgpr[0]);
+    MatVecMul<NumberOfVariables>(&gcbc_params.xt[0][0], &cha_vgpr[0], &drva_vgpr[0]);
+
+    // update de
+    unsigned int out_idx;
+    int iq = 1 - 2 * face_id;
+    for(unsigned int ii = 0; ii < mbci; ++ii)
+    {
+        out_idx = idx + ii * iq * stride;
+        for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+        {
+            de[out_idx] += sbcc[out_idx] * drva_vgpr[variable_id];
+            out_idx += variable_id * dcomp_info.lmx;
+        }
+    }
+}
+
+template<unsigned int Axis, typename Type>
+CANARD_GLOBAL void gcbc_update_inter_curv_kernel(Type * cm,
+                                                 Type * drva,
+                                                 Type * drvb,
+                                                 Type * qa,
+                                                 Type * de,
+                                                 Type * pressure,
+                                                 Type * sbcc,
+                                                 t_point<Type> umf,
+                                                 t_point<Type> dudtmf,
+                                                 unsigned int face_id,
+                                                 unsigned int face_offset,
+                                                 t_dcomp dcomp_info)
+{
+    Type * qa0 = qa;
+    Type * qa1 = qa +     dcomp_info.lmx;
+    Type * qa2 = qa + 2 * dcomp_info.lmx;
+    Type * qa3 = qa + 3 * dcomp_info.lmx;
+    Type * qa4 = qa + 4 * dcomp_info.lmx;
+
+    int thread_stride;
+    int block_stride;
+    int stride;
+    if(Axis == 0)
+    {
+        thread_stride = dcomp_info.lxi;
+        block_stride = dcomp_info.let * dcomp_info.lxi;
+        stride = 1;
+    }
+    else if(Axis == 1)
+    {
+        thread_stride = 1;
+        block_stride = dcomp_info.let * dcomp_info.lxi;
+        stride = dcomp_info.lxi;
+    }
+    else if(Axis == 2)
+    {
+        thread_stride = 1;
+        block_stride = dcomp_info.lxi;
+        stride = dcomp_info.let * dcomp_info.lxi;
+    }
+    unsigned int face_stride = get_face_stride<Axis>(dcomp_info);
+    unsigned int face_idx = blockIdx.y * face_stride + blockIdx.x;
+    unsigned int face_size = get_face_size<Axis>(dcomp_info);
+
+    int thread_idx = blockIdx.x * block_stride + threadIdx.x * thread_stride;
+    int idx = thread_idx + face_offset * stride;
+
+    // load cm to vgpr
+    Type cm_vgpr[NumberOfSpatialDims];
+    for(unsigned int dim_id = 0; dim_id < NumberOfSpatialDims; ++dim_id)
+    {
+        unsigned int i = face_id * NumberOfSpatialDims * face_size +
+            dim_id * face_size + face_idx;
+        cm_vgpr[dim_id] = cm[i];
+    }
+
+    // load drva to vgpr
+    Type drva_vgpr[NumberOfVariables];
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        unsigned int i = face_id * NumberOfVariables * face_size +
+                variable_id * face_size + face_idx;
+        drva_vgpr[variable_id] = drva[i];
+    }
+
+    // load drvb to vgpr
+    Type drvb_vgpr[NumberOfVariables];
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        unsigned int i = face_id * NumberOfVariables * face_size +
+                variable_id * face_size + face_idx;
+        drvb_vgpr[variable_id] = drvb[i];
+    }
+
+    Type vel_vgpr[NumberOfSpatialDims];
+    vel_vgpr[0] = qa1[idx];
+    vel_vgpr[1] = qa2[idx];
+    vel_vgpr[2] = qa3[idx];
+
+    auto gcbc_params = gcbc_vgpr<Type>();
+    gcbc_params.eleme(&cm_vgpr[0], qa0[idx], &vel_vgpr[0],
+                      pressure[idx], umf);
+
+    // compute cha in vgpr
+    Type cha_vgpr[NumberOfVariables];
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        cha_vgpr[variable_id] = drva_vgpr[variable_id];
+    }
+
+    Type ra0 = 1 - 2 * face_id;
+
+    Type dha_vgpr[NumberOfVariables];
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        dha_vgpr[variable_id] = drvb_vgpr[variable_id];
+    }
+    if ( ra0 * ( gcbc_params.vn + gcbc_params.vs ) > 0 )
+    {
+        cha_vgpr[0] = dha_vgpr[0];
+        cha_vgpr[1] = dha_vgpr[1];
+        cha_vgpr[2] = dha_vgpr[2];
+    }
+    if ( ra0 * ( gcbc_params.vn + gcbc_params.vs + gcbc_params.ao ) > 0 )
+    {
+        cha_vgpr[3] = dha_vgpr[3];
+    }
+    if ( ra0 * ( gcbc_params.vn + gcbc_params.vs - gcbc_params.ao ) > 0 )
+    {
+        cha_vgpr[4] = dha_vgpr[4];
+    }
+    for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+    {
+        cha_vgpr[variable_id] -= drva_vgpr[variable_id];
+    }
+
+    gcbc_params.xtr2q(&cm_vgpr[0]);
+
+    MatVecMul<NumberOfVariables>(&gcbc_params.xt[0][0], &cha_vgpr[0], &dha_vgpr[0]);
+
+    // update de
+    unsigned int out_idx;
+    int iq = 1 - 2 * face_id;
+    for(unsigned int ii = 0; ii < mbci; ++ii)
+    {
+        out_idx = idx + ii * iq * stride;
+        for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
+        {
+            de[out_idx] += sbcc[out_idx] * dha_vgpr[variable_id];
+            out_idx += variable_id * dcomp_info.lmx;
+        }
     }
 }
 
