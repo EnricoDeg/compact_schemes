@@ -2,24 +2,28 @@
 #include <cuda.h>
 #include <mpi.h>
 
+#include "common/parameters.hpp"
 #include "numerics.hpp"
+#include "gcbc.hpp"
+#include "grid.hpp"
+#include "physics.hpp"
+
 
 // Main program
 int main()
 {
     // Initialize the MPI environment
-    MPI_Init(NULL, NULL);
+    check_mpi(MPI_Init(NULL, NULL));
 
     // Get the number of processes
     int world_size;
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    check_mpi(MPI_Comm_size(MPI_COMM_WORLD, &world_size));
 
     // Get the rank of the process
     int world_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    check_mpi(MPI_Comm_rank(MPI_COMM_WORLD, &world_rank));
 
     static constexpr unsigned int ax = 0;
-    unsigned int variable_id = 0;
 
     // Subdomain info
     t_dcomp dcomp_info;
@@ -32,59 +36,46 @@ int main()
     float h = 1.0;
     float h_1 = 1.0 / h;
 
-    // Number of bytes to allocate for fields
-    size_t bytes = dcomp_info.lmx*sizeof(float);
+    // cm
+    float *d_cm0, *d_cm1, *d_cm2;
+    cudaMalloc(&d_cm0, 2 * NumberOfSpatialDims * dcomp_info.let * dcomp_info.lze * sizeof(float));
+    cudaMalloc(&d_cm1, 2 * NumberOfSpatialDims * dcomp_info.lxi * dcomp_info.lze * sizeof(float));
+    cudaMalloc(&d_cm2, 2 * NumberOfSpatialDims * dcomp_info.lxi * dcomp_info.let * sizeof(float));
 
-    // Allocate memory for input and output fields on host
-    float *infield = (float*)malloc(bytes);
-    float *outfield = (float*)malloc(bytes);
+    float *d_cm[3];
+    d_cm[0] = d_cm0;
+    d_cm[1] = d_cm1;
+    d_cm[2] = d_cm2;
 
-    // Coefficients for halo exchange
-    float *d_pbco, *d_pbci;
-    cudaMalloc(&d_pbco, 2 * lmd * sizeof(float));
-    cudaMalloc(&d_pbci, 2 * lmd * sizeof(float));
-    deriv_setup(d_pbco, d_pbci);
+    // qa
+    float * d_qa;
+    cudaMalloc(&d_qa, NumberOfSpatialDims * dcomp_info.lmx * sizeof(float));
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    // de
+    float * d_de;
+    cudaMalloc(&d_de, NumberOfSpatialDims * dcomp_info.lmx * sizeof(float));
 
-    // Send buffer
-    float * send0 = (float *)malloc(2 * 2 * dcomp_info.let * dcomp_info.lze * sizeof(float));
-    float * send1 = (float *)malloc(2 * 2 * dcomp_info.lxi * dcomp_info.lze * sizeof(float));
-    float *d_send0, *d_send1, *d_send2;
-    cudaMalloc(&d_send0, 2 * 2 * dcomp_info.let * dcomp_info.lze * sizeof(float));
-    cudaMalloc(&d_send1, 2 * 2 * dcomp_info.lxi * dcomp_info.lze * sizeof(float));
-    cudaMalloc(&d_send2, 2 * 2 * dcomp_info.lxi * dcomp_info.let * sizeof(float));
+    // pressure
+    float * d_pressure;
+    cudaMalloc(&d_pressure, dcomp_info.lmx * sizeof(float));
 
-    float *d_send[3];
-    d_send[0] = d_send0;
-    d_send[1] = d_send1;
-    d_send[2] = d_send2;
+    // yaco
+    float *d_yaco;
+    cudaMalloc(&d_yaco, dcomp_info.lmx * sizeof(float));
 
-    // Recv buffer
-    float * recv0 = (float *)malloc(2 * 2 * dcomp_info.let * dcomp_info.lze * sizeof(float));
-    float * recv1 = (float *)malloc(2 * 2 * dcomp_info.lxi * dcomp_info.lze * sizeof(float));
-    float *d_recv0, *d_recv1, *d_recv2;
-    cudaMalloc(&d_recv0, 2 * 2 * dcomp_info.let * dcomp_info.lze * sizeof(float));
-    cudaMalloc(&d_recv1, 2 * 2 * dcomp_info.lxi * dcomp_info.lze * sizeof(float));
-    cudaMalloc(&d_recv2, 2 * 2 * dcomp_info.lxi * dcomp_info.let * sizeof(float));
+    // ss
+    float *d_ss;
+    cudaMalloc(&d_ss, dcomp_info.lmx * sizeof(float));
 
-    float *d_recv[3];
-    d_recv[0] = d_recv0;
-    d_recv[1] = d_recv1;
-    d_recv[2] = d_recv2;
+    // umf
+    t_point<float> umf = {.x = 0.3, .y = 0.0, .z = 0.0 };
 
-    // drva
-    float *d_drva0, *d_drva1, *d_drva2;
-    cudaMalloc(&d_drva0, 2 * NumberOfVariables * dcomp_info.let * dcomp_info.lze * sizeof(float));
-    cudaMalloc(&d_drva1, 2 * NumberOfVariables * dcomp_info.lxi * dcomp_info.lze * sizeof(float));
-    cudaMalloc(&d_drva2, 2 * NumberOfVariables * dcomp_info.lxi * dcomp_info.let * sizeof(float));
+    // dudtmf
+    t_point<float> dudtmf = {.x = 0.0, .y = 0.0, .z = 0.0 };
 
-    float *d_drva[3];
-    d_drva[0] = d_drva0;
-    d_drva[1] = d_drva1;
-    d_drva[2] = d_drva2;
-
-    // Halo exchange info for each face
+    // npex
+    int * d_npex;
+    cudaMalloc(&d_npex, dcomp_info.lmx * sizeof(int));
 
     // ndf is 1 if halo exchange is needed, otherwise is 0
     unsigned int ndf[2][3];
@@ -105,7 +96,7 @@ int main()
     }
 
     // mcd indicates the pair process for each face. If there is no
-    // halol exchange on a face, it is set to -1
+    // halo exchange on a face, it is set to -1
     int mcd[2][3];
     for(unsigned int ip = 0; ip < 2; ++ip)
     {
@@ -124,105 +115,156 @@ int main()
         mcd[0][ax] = 0;
     }
 
-    // Allocate memory for input and output fields on device
-    float *d_infield, *d_outfield;
-    cudaMalloc(&d_infield, bytes);
-    cudaMalloc(&d_outfield, bytes);
-
-    // Fill host input field
-    if(ax == 0)
+    // nbc indicates the BC type for each face
+    int nbc[2][3];
+    for(unsigned int ip = 0; ip < 2; ++ip)
     {
-        for(unsigned int k = 0; k < dcomp_info.lze; ++k)
+        for(unsigned int nn = 0; nn < 3; ++nn)
         {
-            for(unsigned int j = 0; j < dcomp_info.let; ++j)
-            {
-                for(unsigned int i = 0; i < dcomp_info.lxi; ++i)
-                {
-                    infield[i + j * dcomp_info.lxi + k * dcomp_info.lxi * dcomp_info.let] =
-                        i + world_rank * dcomp_info.lxi +
-                        j * 2 * dcomp_info.lxi +
-                        k * 2 * dcomp_info.lxi * dcomp_info.let;
-                }
-            }
+            nbc[ip][nn] = BC_PERIODIC;
         }
     }
-    else if(ax == 1)
-    {
-        for(unsigned int k = 0; k < dcomp_info.lze; ++k)
-        {
-            for(unsigned int j = 0; j < dcomp_info.let; ++j)
-            {
-                for(unsigned int i = 0; i < dcomp_info.lxi; ++i)
-                {
-                    infield[i + j * dcomp_info.lxi + k * dcomp_info.lxi * dcomp_info.let] =
-                        world_rank * dcomp_info.lxi * dcomp_info.let +
-                        i +
-                        j * dcomp_info.lxi +
-                        k * dcomp_info.lxi * 2 * dcomp_info.let;
-                }
-            }
-        }
-    }
-
-    // Copy data from host to device (input and output field)
-    cudaMemcpy(d_infield, infield, bytes, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_outfield, outfield, bytes, cudaMemcpyHostToDevice);
-
-    // halo exchange
-    mpigo(d_infield, d_send, d_recv, d_pbco, dcomp_info, ndf, mcd);
-
-    // Compute derivative
-    deriv<ax>(d_infield, d_outfield, d_recv[ax], d_pbci,
-              d_drva[ax], h_1, ndf[0][ax], ndf[1][ax], dcomp_info, variable_id);
-
-    // Copy data from device to host
-    cudaMemcpy(send0, d_send0, 2 * 2 * dcomp_info.let * dcomp_info.lze * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(recv0, d_recv0, 2 * 2 * dcomp_info.let * dcomp_info.lze * sizeof(float), cudaMemcpyDeviceToHost);
-
-    cudaMemcpy(send1, d_send1, 2 * 2 * dcomp_info.lxi * dcomp_info.lze * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(recv1, d_recv1, 2 * 2 * dcomp_info.lxi * dcomp_info.lze * sizeof(float), cudaMemcpyDeviceToHost);
-
-    cudaMemcpy(outfield, d_outfield, bytes, cudaMemcpyDeviceToHost);
-
     if(world_rank == 0)
     {
-        std::cout << world_rank << ":outfield:[123] = " << outfield[123] << std::endl;
-        std::cout << world_rank << ":outfield:[124] = " << outfield[124] << std::endl;
-        std::cout << world_rank << ":outfield:[125] = " << outfield[125] << std::endl;
-        std::cout << world_rank << ":outfield:[126] = " << outfield[126] << std::endl;
-        std::cout << world_rank << ":outfield:[127] = " << outfield[127] << std::endl;
+        nbc[0][ax] = BC_NON_REFLECTIVE;
+        nbc[1][ax] = BC_INTER_SUBDOMAINS;
     }
-    else
+    else if(world_rank == 1)
     {
-        std::cout << world_rank << ":outfield[0] = " << outfield[0] << std::endl;
-        std::cout << world_rank << ":outfield[1] = " << outfield[1] << std::endl;
-        std::cout << world_rank << ":outfield[2] = " << outfield[2] << std::endl;
-        std::cout << world_rank << ":outfield[3] = " << outfield[3] << std::endl;
-        std::cout << world_rank << ":outfield[4] = " << outfield[4] << std::endl;
+        nbc[0][ax] = BC_INTER_SUBDOMAINS;
+        nbc[1][ax] = BC_NON_REFLECTIVE;
     }
 
-    // Free CPU memory
-    free(infield);
-    free(outfield);
-    free(send0);
-    free(send1);
-    free(recv0);
-    free(recv1);
+    auto grid_instance = grid<float>(dcomp_info);
+    auto physics_instance = physics<true, float>(dcomp_info);
 
-    // Free GPU memory
-    cudaFree(d_infield);
-    cudaFree(d_outfield);
-    cudaFree(d_pbco);
-    cudaFree(d_pbci);
-    cudaFree(d_send0);
-    cudaFree(d_send1);
-    cudaFree(d_send2);
-    cudaFree(d_recv0);
-    cudaFree(d_recv1);
-    cudaFree(d_recv2);
+    auto numerics_instance = numerics<float>(dcomp_info);
+
+    // setup derivatives
+    numerics_instance.deriv_setup();
+
+    cudaStream_t stream[5];
+    for(int i=0; i<5; i++) cudaStreamCreate(&stream[i]);
+
+    size_t n = 0;
+    size_t ndt = 0;
+    float dt = 0.1f;
+    float dts = 0.0f;
+    float dte = 0.0f;
+    float timo = 0.0f;
+    float dtsum = 0.0f;
+    float tmax = 1.0;
+    float cfl = 0.95f;
+    int nout;
+    float res;
+    int ndati = -1;
+    float dtk, dtko;
+    int ndata = 2;
+    bool output_enabled = false;
+
+    physics_instance.init();
+
+    check_mpi(MPI_Barrier(MPI_COMM_WORLD));
+
+    do{
+        std::cout << "Time step = " << n << std::endl;
+        for(int nk = 0; nk < nkrk; ++nk)
+        {
+
+            // move frame velocity and acceleration before time advancing
+            dtko = dt * min( max( nk - 2, 0 ), 1 ) / ( nkrk - nk + 3 );
+            dtk  = dt * min( nk - 1, 1 ) / ( nkrk - nk + 2 );
+            physics_instance.movef(dtko, dtk, timo);
+
+            // temporary storage of primitive variables and pressure
+
+
+            // compute time step size and output time
+            if(nk == 1)
+            {
+                if(n % 10 == 1)
+                {
+                    ndt = n;
+                    dts = dte;
+                    physics_instance.calc_time_step(grid_instance.xim,
+                                                    grid_instance.etm,
+                                                    grid_instance.zem,
+                                                    d_de,
+                                                    d_yaco,
+                                                    d_ss,
+                                                    umf,
+                                                    cfl,
+                                                    &dte,
+                                                    dcomp_info.lmx);
+                }
+                // dt = dts + (dte - dts) *
+                //     std::sin(0.05f * pi * (n - ndt)) *
+                //     std::sin(0.05f * pi * (n - ndt));
+
+                nout = 0;
+                res = (ndati + 1) * tmax / ndata;
+                if((timo - res) * (timo + dt - res) <= 0.0f)
+                {
+                    nout = 1;
+                    ndati++;
+                }
+            }
+
+            // compute viscous shear stress
+            physics_instance.calc_viscous_shear_stress(d_de, d_ss,
+               grid_instance.xim, grid_instance.etm, grid_instance.zem,
+               d_yaco, dcomp_info, h_1, ndf, mcd, &numerics_instance, &stream[0]);
+
+            // compute fluxes
+            physics_instance.calc_fluxes(d_qa, d_pressure, d_de,
+                                         grid_instance.xim, grid_instance.etm, grid_instance.zem,
+                                         dcomp_info, umf,
+                                         h_1, ndf, mcd, &numerics_instance, &stream[0]);
+
+            float dtwi = 1 / dt;
+
+            // GCBC
+            // auto gcbc_instance = gcbc<float, int>(dcomp_info);
+            // gcbc_go(numerics_instance.drva_buffer, d_cm, gcbc_instance.drvb,
+            //         d_qa, d_de, d_pressure, d_yaco, gcbc_instance.sbcc,
+            //         umf, dudtmf, dcomp_info, dtwi,
+            //         nbc, mcd);
+
+            // sponge condition
+
+            // update conservative variables
+            dtko = dt * min(nk-1, 1) / (nkrk - nk + 2);
+            dtk  = dt / (nkrk - nk + 1);
+            physics_instance.movef(dtko, dtk, timo);
+
+            // wall temperature / velocity condition
+
+            // wall_condition_update(d_qa, d_npex, umf, dcomp_info, nbc);
+        }
+
+        // advance in time
+        n++;
+        timo += dt;
+
+        // record intermediate results
+        // if(output_enabled)
+        // {
+        //     if(timo > (-tmax) / ndata)
+        //     {
+        //         dtsum += dt;
+        //         if(nout == 1)
+        //         {
+
+        //         }
+        //     }
+        // }
+
+    } while(timo < tmax && (dt != 0.0f || n <= 2));
+
+    for(int i=0; i<5; i++) cudaStreamDestroy(stream[i]);
 
     // Finalize the MPI environment.
-    MPI_Finalize();
+    check_mpi(MPI_Finalize());
 
     return 0;
 }

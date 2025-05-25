@@ -11,8 +11,8 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CUDA_NVCC_FLAGS -std=c++17)
 
 cuda_add_executable( canard_driver
-                canard.cu
-              )
+                     canard.cu
+                   )
 target_include_directories(canard_driver PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(canard_driver PRIVATE ${MPI_CXX_INCLUDE_DIRS})
 target_link_libraries(canard_driver ${MPI_CXX_LIBRARIES})
