@@ -56,16 +56,16 @@ struct numerics
         drva_buffer[1] = drva1;
         drva_buffer[2] = drva2;
 
-        send0 = allocate_cuda<Type>(2 * 2 * face_size0);
-        send1 = allocate_cuda<Type>(2 * 2 * face_size1);
-        send2 = allocate_cuda<Type>(2 * 2 * face_size2);
+        send0 = allocate_cuda<Type>(2 * 2 * face_size0 * NumberOfVariables);
+        send1 = allocate_cuda<Type>(2 * 2 * face_size1 * NumberOfVariables);
+        send2 = allocate_cuda<Type>(2 * 2 * face_size2 * NumberOfVariables);
         send_buffer[0] = send0;
         send_buffer[1] = send1;
         send_buffer[2] = send2;
 
-        recv0 = allocate_cuda<Type>(2 * 2 * face_size0);
-        recv1 = allocate_cuda<Type>(2 * 2 * face_size1);
-        recv2 = allocate_cuda<Type>(2 * 2 * face_size2);
+        recv0 = allocate_cuda<Type>(2 * 2 * face_size0 * NumberOfVariables);
+        recv1 = allocate_cuda<Type>(2 * 2 * face_size1 * NumberOfVariables);
+        recv2 = allocate_cuda<Type>(2 * 2 * face_size2 * NumberOfVariables);
         recv_buffer[0] = recv0;
         recv_buffer[1] = recv1;
         recv_buffer[2] = recv2;
@@ -209,14 +209,15 @@ struct numerics
         memcpy_cuda_h2d(pbci, h_pbci, 2 * lmd);
     }
 
+    // 1D field
     template<unsigned int Axis>
-    void deriv(Type *infield,
-               Type *outfield,
-               Type h_1,
-               int nstart,
-               int nend,
-               t_dcomp dcomp_info,
-               unsigned int variable_id)
+    void deriv1d(Type *infield,
+                Type *outfield,
+                Type h_1,
+                int nstart,
+                int nend,
+                t_dcomp dcomp_info,
+                unsigned int variable_id)
     {
         static_assert(Axis >= 0 && Axis < 3, "Axis index must be 0, 1, or 2");
 
@@ -250,20 +251,71 @@ struct numerics
         dim3 blocksPerGrid(blockPerGridX, blockPerGridY);
 
         TIME(blocksPerGrid, threadsPerBlock, shmem_bytes, 0, false,
-            CANARD_KERNEL_NAME(deriv_kernel<Axis>),
+            CANARD_KERNEL_NAME(deriv_kernel_1d<Axis>),
             infield, outfield,
             recv_buffer[Axis], pbci,
             drva_buffer[Axis], h_1, nstart, nend, dcomp_info, variable_id);
     }
 
+    // 2D field
+    template<unsigned int Axis>
+    void deriv2d(Type *infield,
+                Type *outfield,
+                Type h_1,
+                int nstart,
+                int nend,
+                t_dcomp dcomp_info,
+                unsigned int variable_id,
+                unsigned int component_id,
+                cudaStream_t *stream)
+    {
+        static_assert(Axis >= 0 && Axis < 3, "Axis index must be 0, 1, or 2");
+
+        unsigned int blockSize;
+        unsigned int blockPerGridX;
+        unsigned int blockPerGridY;
+        unsigned int shmem_bytes;
+        if constexpr(Axis == 0)
+        {
+            blockSize = dcomp_info.lxi;
+            blockPerGridX = dcomp_info.let;
+            blockPerGridY = dcomp_info.lze;
+            shmem_bytes = (5 * dcomp_info.lxi) * sizeof(Type);
+        }
+        else if constexpr(Axis == 1)
+        {
+            blockSize = dcomp_info.let;
+            blockPerGridX = dcomp_info.lxi;
+            blockPerGridY = dcomp_info.lze;
+            shmem_bytes = (5 * dcomp_info.let) * sizeof(Type);
+        }
+        else if constexpr(Axis == 2)
+        {
+            blockSize = dcomp_info.lze;
+            blockPerGridX = dcomp_info.lxi;
+            blockPerGridY = dcomp_info.let;
+            shmem_bytes = (5 * dcomp_info.lze) * sizeof(Type);
+        }
+
+        dim3 threadsPerBlock(blockSize, 1);
+        dim3 blocksPerGrid(blockPerGridX, blockPerGridY);
+
+        TIME(blocksPerGrid, threadsPerBlock, shmem_bytes, *stream, true,
+            CANARD_KERNEL_NAME(deriv_kernel_2d<Axis>),
+            infield, outfield,
+            recv_buffer[Axis], pbci,
+            drva_buffer[Axis], h_1, nstart, nend, dcomp_info, variable_id, component_id);
+    }
+
+    // 1D infield
     void mpigo(Type *infield,
                t_dcomp dcomp_info,
                unsigned int ndf[2][3],
-               int mcd[2][3])
+               int mcd[2][3],
+               int itag)
     {
         // Get the rank of the process
         auto exchange_instance = exchange<Type>();
-        int itag = 1;
 
         Type *send, *recv;
         host::static_for<0, 3, 1>{}([&](auto nn)
@@ -305,6 +357,127 @@ struct numerics
                 if(ndf[ip][nn] == 1)
                 {
                     buffer_instance.fill(istart, increment, buffer_offset);
+                    exchange_instance.trigger(mpi_size,
+                                              pointer_offset,
+                                              mcd[ip][nn],
+                                              itag + iq,
+                                              itag + ip);
+                }
+            });
+        });
+
+        exchange_instance.reset();
+    }
+
+    // 2D infield
+    template<unsigned int min_value, unsigned int max_value>
+    void fill_buffers(Type *infield,
+                      int nrt,
+                      t_dcomp dcomp_info,
+                      unsigned int ndf[2][3],
+                      cudaStream_t *streams)
+    {
+        // Get the rank of the process
+        Type *send, *recv;
+        host::static_for<min_value, max_value, 1>{}([&](auto m)
+        {
+            host::static_for<0, 3, 1>{}([&](auto nn)
+            {
+                int nzk = ( 1 - nrt ) * ( nn );
+
+                size_t face_size;
+                int dim;
+                if constexpr(nn == 0)
+                {
+                    face_size = dcomp_info.let * dcomp_info.lze;
+                    dim = dcomp_info.lxi;
+                }
+                else if constexpr(nn == 1)
+                {
+                    face_size = dcomp_info.lxi * dcomp_info.lze;
+                    dim = dcomp_info.let;
+                }
+                else if constexpr(nn == 2)
+                {
+                    face_size = dcomp_info.lxi * dcomp_info.let;
+                    dim = dcomp_info.lze;
+                }
+
+                send = send_buffer[nn] + m * 2 * 2 * face_size;
+                recv = recv_buffer[nn] + m * 2 * 2 * face_size;
+
+                unsigned int infield_offset = nzk * dcomp_info.lmx +
+                    m * dcomp_info.lmx * NumberOfSpatialDims;
+
+                auto buffer_instance = gpu_buffer<nn, Type>(infield + infield_offset,
+                                                            send,
+                                                            pbco,
+                                                            dcomp_info);
+
+                host::static_for<0, 2, 1>{}([&](auto ip)
+                {
+                    const int istart = ip * (dim - 1);
+                    const int increment = 1 - 2 * ip;
+                    const int buffer_offset = ip * 2 * face_size;
+                    if(ndf[ip][nn] == 1)
+                    {
+                        buffer_instance.fill(istart, increment, buffer_offset, &streams[m]);
+                    }
+                });
+            });
+        });
+    }
+
+    // 2D infield
+    void mpigo(t_dcomp dcomp_info,
+               unsigned int ndf[2][3],
+               int mcd[2][3],
+               int itag,
+               unsigned int variable_id,
+               cudaStream_t *stream)
+    {
+        cudaStreamSynchronize(*stream);
+        // Get the rank of the process
+        auto exchange_instance = exchange<Type>();
+
+        Type *send, *recv;
+        host::static_for<0, 3, 1>{}([&](auto nn)
+        {
+            size_t mpi_size;
+            size_t face_size;
+            int dim;
+            if constexpr(nn == 0)
+            {
+                mpi_size = 2 * dcomp_info.let * dcomp_info.lze;
+                face_size = dcomp_info.let * dcomp_info.lze;
+                dim = dcomp_info.lxi;
+            }
+            else if constexpr(nn == 1)
+            {
+                mpi_size = 2 * dcomp_info.lxi * dcomp_info.lze;
+                face_size = dcomp_info.lxi * dcomp_info.lze;
+                dim = dcomp_info.let;
+            }
+            else if constexpr(nn == 2)
+            {
+                mpi_size = 2 * dcomp_info.lxi * dcomp_info.let;
+                face_size = dcomp_info.lxi * dcomp_info.let;
+                dim = dcomp_info.lze;
+            }
+
+            send = send_buffer[nn] + variable_id * 2 * 2 * face_size;
+            recv = recv_buffer[nn] + variable_id * 2 * 2 * face_size;
+            exchange_instance.reset_buffer_pointer(send, recv);
+
+            host::static_for<0, 2, 1>{}([&](auto ip)
+            {
+                static constexpr auto iq = 1 - ip;
+                const int istart = ip * (dim - 1);
+                const int increment = 1 - 2 * ip;
+                const int buffer_offset = ip * mpi_size;
+                const int pointer_offset = ip * mpi_size;
+                if(ndf[ip][nn] == 1)
+                {
                     exchange_instance.trigger(mpi_size,
                                               pointer_offset,
                                               mcd[ip][nn],

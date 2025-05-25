@@ -27,8 +27,8 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef CANARD_PHYSICS_HPP
-#define CANARD_PHYSICS_HPP
+#ifndef CANARD_GRID_HPP
+#define CANARD_GRID_HPP
 
 #include "common/data_types.hpp"
 #include "common/parameters.hpp"

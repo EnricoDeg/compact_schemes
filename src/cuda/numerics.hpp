@@ -50,7 +50,7 @@ struct gpu_buffer
     {
     }
 
-    void fill(int istart, int increment, int buffer_offset)
+    void fill(int istart, int increment, int buffer_offset, cudaStream_t *stream)
     {
         static_assert(Axis >= 0 && Axis < 3, "Axis index must be 0, 1, or 2");
     
@@ -75,7 +75,7 @@ struct gpu_buffer
         dim3 threadsPerBlock(blockSize);
         dim3 blocksPerGrid(blockPerGrid);
     
-        TIME(blocksPerGrid, threadsPerBlock, 0, 0, false,
+        TIME(blocksPerGrid, threadsPerBlock, 0, *stream, true,
             CANARD_KERNEL_NAME(fill_gpu_buffer_kernel<Axis>),
             infield, buffer, pbco, dcomp_info, istart, increment, buffer_offset);
     }

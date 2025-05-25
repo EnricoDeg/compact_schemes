@@ -66,4 +66,11 @@ static constexpr double hamhamm1     = ham * hamm1;
 static constexpr double prndtl       = 0.71;
 static constexpr double gamm1prndtli = 1.0 / ( gamm1 * prndtl );
 
+static constexpr double pi           = 3.14159265358979323846;
+
+static constexpr int nrall = 0;
+
+// Runge Kutta
+static constexpr int nkrk = 4;
+
 #endif

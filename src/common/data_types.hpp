@@ -50,4 +50,23 @@ struct t_point
     Type z;
 };
 
+template<typename Type>
+struct t_stress_tensor
+{
+    Type * xx;
+    Type * yy;
+    Type * zz;
+    Type * xy;
+    Type * yz;
+    Type * zx;
+};
+
+template<typename Type>
+struct t_heat_fluxes
+{
+    Type * xx;
+    Type * yy;
+    Type * zz;
+};
+
 #endif

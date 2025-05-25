@@ -30,22 +30,15 @@
 #ifndef CANARD_DISPATCH_HPP
 #define CANARD_DISPATCH_HPP
 
-#include <chrono>
-#include <iostream>
-
-using namespace std::chrono;
+#include "cuda/check.hpp"
 
 #define TIME(blocksPerGrid, threadsPerBlock, shmem, stream, async, func, args ...)               \
   do {                                                                                           \
-    auto start = high_resolution_clock::now();                                                   \
     func<<< blocksPerGrid, threadsPerBlock, shmem, stream >>>(args);                             \
     if (!async) {                                                                                \
         check_cuda( cudaPeekAtLastError() ) ;                                                    \
         check_cuda( cudaStreamSynchronize(stream) );                                             \
     }                                                                                            \
-    auto stop = high_resolution_clock::now();                                                    \
-    auto duration = duration_cast<microseconds>(stop - start);                                   \
-    std::cout << "Time taken by function: " << duration.count() << " microseconds" << std::endl; \
   } while(0)
 
 
