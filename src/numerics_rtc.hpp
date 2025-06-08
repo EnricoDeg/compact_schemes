@@ -88,33 +88,45 @@ struct numerics_rtc : public numerics_base<Type>
         int nstart,
         int nend)
     {
+        int iter;
         unsigned int blockSize;
+        unsigned int blocksize_local;
+        unsigned int lxi_local;
         if constexpr(Axis == 0)
         {
             blockSize = dcomp_info.lxi;
+            iter = static_cast<int>(std::log2f(dcomp_info.lxi / 2));
+            blocksize_local = blockSize;
+            lxi_local = blockSize / (blocksize_local);
         }
         else if constexpr(Axis == 1)
         {
-            blockSize = dcomp_info.let;
+            blockSize = 1024;
+            iter = static_cast<int>(std::log2f(dcomp_info.let / 2));
+            blocksize_local = dcomp_info.let;
+            lxi_local = blockSize / (blocksize_local);
         }
         else if constexpr(Axis == 2)
         {
-            blockSize = dcomp_info.lze;
+            blockSize = 1024;
+            iter = static_cast<int>(std::log2f(dcomp_info.lze / 2));
+            blocksize_local = dcomp_info.lze;
+            lxi_local = blockSize / (blocksize_local);
         }
-
-        int iter = static_cast<int>(std::log2f(blockSize / 2));
 
         std::vector<std::string> kernel_opts;
         kernel_opts.push_back(std::string("-DDEBUG_INFO=1"));
         kernel_opts.push_back(std::string("-DITERS="+std::to_string(iter)));
         kernel_opts.push_back(std::string("-DNSTART="+std::to_string(nstart)));
         kernel_opts.push_back(std::string("-DNEND="+std::to_string(nend)));
+        kernel_opts.push_back(std::string("-DBLOCKSIZE_LOCAL="+std::to_string(blocksize_local)));
+        kernel_opts.push_back(std::string("-DLXI_LOCAL="+std::to_string(lxi_local)));
 
         std::string kernel_name("deriv_kernel_1d");
         std::vector<std::string> kernel_name_vec;
         kernel_name_vec.push_back(getKernelNameForType<Axis, Type>(kernel_name,
                                                                    blockSize));
-        std::cout << kernel_name_vec[0] << std::endl;
+        std::cout << "Compiling " << kernel_name_vec[0] << std::endl;
         deriv1d_compiler = new rt_compiler(std::string("cuda/kernels/numerics_rtc.hpp"),
                                            std::string("deriv1d.cu"),
                                            kernel_name_vec,
@@ -142,19 +154,16 @@ struct numerics_rtc : public numerics_base<Type>
         }
         else if constexpr(Axis == 1)
         {
-            blockSize = dcomp_info.let;
-            blockPerGridX = dcomp_info.lxi;
+            blockSize = 1024;
+            blockPerGridX = dcomp_info.lxi / (blockSize / dcomp_info.let);
             blockPerGridY = dcomp_info.lze;
         }
         else if constexpr(Axis == 2)
         {
-            blockSize = dcomp_info.lze;
-            blockPerGridX = dcomp_info.lxi;
+            blockSize = 1024;
+            blockPerGridX = dcomp_info.lxi / (blockSize / dcomp_info.lze);
             blockPerGridY = dcomp_info.let;
         }
-
-        dim3 threadsPerBlock(blockSize, 1);
-        dim3 blocksPerGrid(blockPerGridX, blockPerGridY);
 
         CUfunction kernel = deriv1d_compiler->get_kernel(0);
         void *args[] = { &infield, &outfield, &recv_buffer[Axis],

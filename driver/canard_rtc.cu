@@ -14,9 +14,7 @@
 int main()
 {
     mpi_driver mpi_driver_instance{};
-    std::cout << "mpi driver initialized\n";
     cuda_driver cuda_driver_instance{};
-    std::cout << "cuda driver initialized\n";
 
     // Get the number of processes
     int world_size;
@@ -26,7 +24,7 @@ int main()
     int world_rank;
     check_mpi(MPI_Comm_rank(MPI_COMM_WORLD, &world_rank));
 
-    static constexpr unsigned int ax = 1;
+    static constexpr unsigned int ax = 2;
 
     // Subdomain info
     t_dcomp dcomp_info;
@@ -57,8 +55,6 @@ int main()
 
     numerics_instance.template deriv1d_compile<ax>(dcomp_info, nstart, nend);
 
-    std::cout << "compilation done\n";
-
     constexpr unsigned int NStreams = 1;
     CUstream streams[NStreams];
     for(unsigned int i = 0; i < NStreams; ++i)
@@ -88,16 +84,28 @@ int main()
     check_cuda( cudaMemcpy(outfield, d_outfield,
         dcomp_info.lmx * sizeof(float), cudaMemcpyDeviceToHost) );
 
-    std::cout << outfield[0] << std::endl;
-    std::cout << outfield[1] << std::endl;
-    std::cout << outfield[2] << std::endl;
-    std::cout << outfield[3] << std::endl;
-    std::cout << outfield[4] << std::endl;
-    std::cout << outfield[5] << std::endl;
-    std::cout << outfield[6] << std::endl;
-    std::cout << outfield[7] << std::endl;
-
-    std::cout << "Done\n";
+    float solution;
+    if constexpr(ax == 0)
+    {
+        solution = infield[1] - infield[0];
+    }
+    else if constexpr(ax == 1)
+    {
+        solution = infield[dcomp_info.lxi] - infield[0];
+    }
+    else if constexpr(ax == 2)
+    {
+        solution = infield[dcomp_info.lxi * dcomp_info.let] - infield[0];
+    }
+    for(unsigned int i = 0; i < dcomp_info.lmx; ++i)
+    {
+        if(std::abs(outfield[i] - solution) / solution > 1e-6)
+        {
+            std::cout << std::abs(outfield[i] - solution) / solution << std::endl;
+            std::cout << i << ": out = " << outfield[i] << " -- ref = " << solution << std::endl;
+            exit(1);
+        }
+    }
 
     return 0;
 }

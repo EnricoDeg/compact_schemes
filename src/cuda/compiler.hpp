@@ -58,7 +58,6 @@ void compile_program(nvrtcProgram prog, const char *opts[], int num_opts)
     check_cuda_rtc( nvrtcGetProgramLogSize(prog, &logSize) );
     char *log = new char[logSize];
     check_cuda_rtc( nvrtcGetProgramLog(prog, log) );
-    std::cout << log << '\n';
     delete[] log;
     if (compileResult != NVRTC_SUCCESS) {
         exit(1);
@@ -69,7 +68,6 @@ std::string readFile(std::string file, std::string path)
 {
     std::string myText;
     std::string str;
-    std::cout << path+file << std::endl;
     // read file
     std::ifstream MyReadFile(path+file);
     while (std::getline (MyReadFile, str)) {
@@ -92,14 +90,14 @@ class rt_compiler
                 std::vector<std::string> kernel_opts)
     {
         const char* env_p;
-        if (env_p = getenv("CANARD_ROOT"))
+        if (!(env_p = getenv("CANARD_ROOT")))
         {
-            std::cout << "CANARD_ROOT=" << env_p << '\n';
+            std::cout << "Error: CANARD_ROOT=" << env_p << '\n';
+            exit(EXIT_FAILURE);
         }
         std::string project_root_path(env_p);
 
         std::string myText = readFile(std::string("/")+filename, project_root_path);
-        // std::cout << myText << std::endl;
         check_cuda_rtc( nvrtcCreateProgram(&prog,
                                            myText.c_str(),
                                            program_name.c_str(),
