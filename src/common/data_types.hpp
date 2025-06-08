@@ -30,15 +30,12 @@
 #ifndef CANARD_COMMON_DATA_TYPES_HPP
 #define CANARD_COMMON_DATA_TYPES_HPP
 
-#include <complex>
-#include "cassert"
-
 struct t_dcomp
 {
-    size_t lmx;
-    size_t lxi;
-    size_t let;
-    size_t lze;
+    int lmx;
+    int lxi;
+    int let;
+    int lze;
 };
 typedef struct t_dcomp t_dcomp;
 

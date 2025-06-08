@@ -33,6 +33,7 @@
 #include "common/data_types.hpp"
 #include "common/parameters.hpp"
 #include "common/utils.hpp"
+#include "common/nvtx_utils.hpp"
 
 #include "cuda/check.hpp"
 #include "host/functional.hpp"
@@ -42,7 +43,7 @@
 
 #include "mpi/data_types.hpp"
 
-#include "numerics.hpp"
+#include "numerics_pc.hpp"
 
 template<bool EnableViscous, typename Type>
 struct physics
@@ -155,7 +156,7 @@ struct physics
                      Type h_1,
                      unsigned int ndf[2][3],
                      int mcd[2][3],
-                     numerics<Type> *numerics_instance,
+                     numerics_pc<Type> *numerics_instance,
                      cudaStream_t *streams)
     {
         std::string function_name  = "calc_fluxes";
@@ -230,7 +231,7 @@ struct physics
                                    Type h_1,
                                    unsigned int ndf[2][3],
                                    int mcd[2][3],
-                                   numerics<Type> *numerics_instance,
+                                   numerics_pc<Type> *numerics_instance,
                                    cudaStream_t *streams)
     {
         std::string function_name  = "calc_viscous_shear_stress";

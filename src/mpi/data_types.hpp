@@ -31,6 +31,8 @@
 #define CANARD_MPI_DATA_TYPES_HPP
 
 #include <mpi.h>
+#include <complex>
+#include <cassert>
 
 template <typename T>
 constexpr MPI_Datatype mpi_get_type() noexcept {

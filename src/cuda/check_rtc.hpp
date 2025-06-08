@@ -1,5 +1,5 @@
 /*
- * @file definitions.hpp
+ * @file check_rtc.hpp
  *
  * @copyright Copyright (C) 2025 Enrico Degregori <enrico.degregori@gmail.com>
  *
@@ -26,24 +26,27 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
+#ifndef CANARD_CUDA_CHECK_RTC_HPP
+#define CANARD_CUDA_CHECK_RTC_HPP
 
-#ifndef CANARD_DEFINITIONS_HPP
-#define CANARD_DEFINITIONS_HPP
+#include <cuda.h>
+#include <nvrtc.h>
+#include <iostream>
 
-#define FULL_WARP_MASK 0xffffffff
+inline void check_cuda_rtc(nvrtcResult error) {
+    if ( error != NVRTC_SUCCESS ) {
+        std::cout << "NVRTC error: " << nvrtcGetErrorString(error) << std::endl;
+        exit(EXIT_FAILURE);
+    }
+}
 
-#define CANARD_GLOBAL __global__
-#define CANARD_DEVICE __device__
-#define CANARD_RESTRICT __restrict__
-#define CANARD_HOST __host__
-#define CANARD_HOST_DEVICE __host__ __device__
-#define CANARD_SHMEM __shared__
-#define CANARD_FORCE_INLINE __forceinline__
-#define CANARD_LAUNCH_BOUNDS(N) __launch_bounds__(N)
-
-#define CANARD_WARPSIZE 32
-
-#define CANARD_UNROLL _Pragma("unroll")
-#define CANARD_NO_UNROLL _Pragma("nounroll")
+inline void check_cuda_driver(CUresult error) {
+    if ( error != CUDA_SUCCESS ) {
+        const char *msg;
+        cuGetErrorName(error, &msg);
+        std::cout << "CUDA driver error: " << msg << std::endl;
+        exit(EXIT_FAILURE);
+    }
+}
 
 #endif

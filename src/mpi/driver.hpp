@@ -1,5 +1,5 @@
 /*
- * @file definitions.hpp
+ * @file driver.hpp
  *
  * @copyright Copyright (C) 2025 Enrico Degregori <enrico.degregori@gmail.com>
  *
@@ -27,23 +27,30 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef CANARD_DEFINITIONS_HPP
-#define CANARD_DEFINITIONS_HPP
+#ifndef CANARD_MPI_DRIVER_HPP
+#define CANARD_MPI_DRIVER_HPP
 
-#define FULL_WARP_MASK 0xffffffff
+#include "mpi/check.hpp"
 
-#define CANARD_GLOBAL __global__
-#define CANARD_DEVICE __device__
-#define CANARD_RESTRICT __restrict__
-#define CANARD_HOST __host__
-#define CANARD_HOST_DEVICE __host__ __device__
-#define CANARD_SHMEM __shared__
-#define CANARD_FORCE_INLINE __forceinline__
-#define CANARD_LAUNCH_BOUNDS(N) __launch_bounds__(N)
+class mpi_driver
+{
+    public:
+    mpi_driver()
+    {
+        // Initialize the MPI environment
+        check_mpi(MPI_Init(NULL, NULL));
+    }
 
-#define CANARD_WARPSIZE 32
+    ~mpi_driver()
+    {
+        // Finalize the MPI environment.
+        check_mpi(MPI_Finalize());
+    }
 
-#define CANARD_UNROLL _Pragma("unroll")
-#define CANARD_NO_UNROLL _Pragma("nounroll")
+    private:
+    CUdevice cuDevice;
+    CUcontext context;
+};
+
 
 #endif

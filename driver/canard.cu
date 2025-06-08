@@ -3,11 +3,10 @@
 #include <mpi.h>
 
 #include "common/parameters.hpp"
-#include "numerics.hpp"
+#include "numerics_pc.hpp"
 #include "gcbc.hpp"
 #include "grid.hpp"
 #include "physics.hpp"
-
 
 // Main program
 int main()
@@ -138,7 +137,7 @@ int main()
     auto grid_instance = grid<float>(dcomp_info);
     auto physics_instance = physics<true, float>(dcomp_info);
 
-    auto numerics_instance = numerics<float>(dcomp_info);
+    auto numerics_instance = numerics_pc<float>(dcomp_info);
 
     // setup derivatives
     numerics_instance.deriv_setup();

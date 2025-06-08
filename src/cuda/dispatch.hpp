@@ -41,6 +41,19 @@
     }                                                                                            \
   } while(0)
 
+#define TIME_RTC(blocksPerGridX, blocksPerGridY, blocksPerGridZ,              \
+                 threadsPerBlockX, threadsPerBlockY, threadsPerBlockZ,        \
+                 shmem, stream, async, func, args)                            \
+  do {                                                                        \
+    check_cuda_driver( cuLaunchKernel(func,                                   \
+                        blocksPerGridX, blocksPerGridY, blocksPerGridZ,       \
+                        threadsPerBlockX, threadsPerBlockY, threadsPerBlockZ, \
+                        shmem, stream,                                        \
+                        args, 0) );                                           \
+    if (!async) {                                                             \
+        check_cuda_driver( cuStreamSynchronize ( stream ) );                  \
+    }                                                                         \
+  } while(0)
 
 #define CANARD_KERNEL_NAME(...) __VA_ARGS__
 

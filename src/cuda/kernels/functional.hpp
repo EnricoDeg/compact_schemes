@@ -30,12 +30,13 @@
 #ifndef CANARD_FUNCTIONAL_HPP
 #define CANARD_FUNCTIONAL_HPP
 
+
 #include "cuda/kernels/definitions.hpp"
 
 namespace details {
 
-using index_t = int32_t;
-using long_index_t = int64_t;
+using index_t = int;
+using long_index_t = long int;
 
 template <class T, T v>
 struct integral_constant
