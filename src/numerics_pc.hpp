@@ -35,10 +35,9 @@
 
 #include "host/functional.hpp"
 
-#include "cuda/numerics.hpp"
+#include "cuda/numerics_pc.hpp"
 #include "cuda/common.hpp"
 
-#include "mpi/exchange.hpp"
 #include "numerics_base.hpp"
 
 template<typename Type>
@@ -60,6 +59,7 @@ struct numerics_pc : public numerics_base<Type>
     using Base::recv_buffer;
     using Base::pbco;
     using Base::pbci;
+    using Base::mpigo;
 
     numerics_pc(t_dcomp dcomp_info) : numerics_base<Type>(dcomp_info)
     {
@@ -286,68 +286,6 @@ struct numerics_pc : public numerics_base<Type>
                 });
             });
         });
-    }
-
-    // 2D infield
-    void mpigo(t_dcomp dcomp_info,
-               unsigned int ndf[2][3],
-               int mcd[2][3],
-               int itag,
-               unsigned int variable_id,
-               cudaStream_t *stream)
-    {
-        cudaStreamSynchronize(*stream);
-        // Get the rank of the process
-        auto exchange_instance = exchange<Type>();
-
-        Type *send, *recv;
-        host::static_for<0, 3, 1>{}([&](auto nn)
-        {
-            size_t mpi_size;
-            size_t face_size;
-            int dim;
-            if constexpr(nn == 0)
-            {
-                mpi_size = 2 * dcomp_info.let * dcomp_info.lze;
-                face_size = dcomp_info.let * dcomp_info.lze;
-                dim = dcomp_info.lxi;
-            }
-            else if constexpr(nn == 1)
-            {
-                mpi_size = 2 * dcomp_info.lxi * dcomp_info.lze;
-                face_size = dcomp_info.lxi * dcomp_info.lze;
-                dim = dcomp_info.let;
-            }
-            else if constexpr(nn == 2)
-            {
-                mpi_size = 2 * dcomp_info.lxi * dcomp_info.let;
-                face_size = dcomp_info.lxi * dcomp_info.let;
-                dim = dcomp_info.lze;
-            }
-
-            send = send_buffer[nn] + variable_id * 2 * 2 * face_size;
-            recv = recv_buffer[nn] + variable_id * 2 * 2 * face_size;
-            exchange_instance.reset_buffer_pointer(send, recv);
-
-            host::static_for<0, 2, 1>{}([&](auto ip)
-            {
-                static constexpr auto iq = 1 - ip;
-                const int istart = ip * (dim - 1);
-                const int increment = 1 - 2 * ip;
-                const int buffer_offset = ip * mpi_size;
-                const int pointer_offset = ip * mpi_size;
-                if(ndf[ip][nn] == 1)
-                {
-                    exchange_instance.trigger(mpi_size,
-                                              pointer_offset,
-                                              mcd[ip][nn],
-                                              itag + iq,
-                                              itag + ip);
-                }
-            });
-        });
-
-        exchange_instance.reset();
     }
 };
 

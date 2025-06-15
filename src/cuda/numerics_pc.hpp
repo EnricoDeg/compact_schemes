@@ -1,5 +1,5 @@
 /*
- * @file numerics.hpp
+ * @file numerics_pc.hpp
  *
  * @copyright Copyright (C) 2025 Enrico Degregori <enrico.degregori@gmail.com>
  *
@@ -27,12 +27,12 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef CANARD_CUDA_NUMERICS_HPP
-#define CANARD_CUDA_NUMERICS_HPP
+#ifndef CANARD_CUDA_NUMERICS_PC_HPP
+#define CANARD_CUDA_NUMERICS_PC_HPP
 
 #include <cmath>
 
-#include "cuda/kernels/numerics.hpp"
+#include "cuda/kernels/numerics_pc.hpp"
 #include "cuda/check.hpp"
 #include "cuda/dispatch.hpp"
 

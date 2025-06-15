@@ -231,15 +231,24 @@ CANARD_DEVICE inline void build_system(unsigned int thread_local_idx,
     }
 }
 
-template<unsigned int Axis, unsigned int BlockSize, typename Type>
-CANARD_DEVICE void deriv_kernel_1d_impl(Type *infield,
-                                        Type *outfield,
-                                        Type *recv,
-                                        Type *pbci,
-                                        Type *drva,
-                                        t_dcomp dcomp_info,
-                                        unsigned int variable_id,
-                                        Type *sx, Type *srhs, Type *sa, Type *sb, Type *sc)
+template<
+unsigned int Axis,
+unsigned int AxisOut,
+unsigned int BlockSize,
+typename Type>
+CANARD_DEVICE void deriv_kernel_impl(Type *infield,
+                                     Type *outfield,
+                                     Type *recv,
+                                     Type *pbci,
+                                     Type *drva,
+                                     t_dcomp dcomp_info,
+                                     unsigned int variable_id,
+                                     unsigned int component_id,
+                                     Type *sx,
+                                     Type *srhs,
+                                     Type *sa,
+                                     Type *sb,
+                                     Type *sc)
 {
     constexpr int NumberOfIterations = ITERS;
     constexpr unsigned int nstart = NSTART;
@@ -287,14 +296,15 @@ CANARD_DEVICE void deriv_kernel_1d_impl(Type *infield,
     }
 
     // load input field in shared memory
-    sx[thread_local_idx] = infield[gmem_idx];
+    sx[thread_local_idx] = infield[gmem_idx + component_id * dcomp_info.lmx];
     __syncthreads();
 
     // load shared memory: tridiagonal matrix and rhs
+    Type * recv_variable = recv + variable_id * 2 * 2 * face_size;
     build_system<nstart, nend, blocksize_local, lxi_local>(thread_local_idx,
                  face_idx, face_size,
                  sa, sb, sc, srhs, sx,
-                 recv, pbci);
+                 recv_variable, pbci);
 
     __syncthreads();
 
@@ -305,7 +315,7 @@ CANARD_DEVICE void deriv_kernel_1d_impl(Type *infield,
     __syncthreads();
 
     // store results
-    outfield[gmem_idx] = sx[thread_local_idx];
+    outfield[gmem_idx + AxisOut * dcomp_info.lmx] = sx[thread_local_idx];
 
     if(thread_id_in_group == 0)
     {

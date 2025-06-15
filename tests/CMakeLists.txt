@@ -44,7 +44,8 @@ cuda_add_executable( test_physics_serial
                      test_physics_serial.cu
                    )
 target_include_directories(test_physics_serial PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_link_libraries(test_physics_serial GTest::gtest_main)
+target_include_directories(test_physics_serial PRIVATE ${MPI_CXX_INCLUDE_DIRS})
+target_link_libraries(test_physics_serial ${MPI_CXX_LIBRARIES} GTest::gtest_main)
 set_property(TARGET test_physics_serial PROPERTY CUDA_STANDARD 17)
 
 # numerics serial
@@ -52,7 +53,8 @@ cuda_add_executable( test_numerics_serial
                      test_numerics_serial.cu
                    )
 target_include_directories(test_numerics_serial PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_link_libraries(test_numerics_serial GTest::gtest_main ${NVRTC_LIB} ${CUDA_DRIVER_LIB})
+target_include_directories(test_numerics_serial PRIVATE ${MPI_CXX_INCLUDE_DIRS})
+target_link_libraries(test_numerics_serial GTest::gtest_main ${MPI_CXX_LIBRARIES} ${NVRTC_LIB} ${CUDA_DRIVER_LIB})
 set_property(TARGET test_numerics_serial PROPERTY CUDA_STANDARD 17)
 
 # set(UNIT_TEST test_physics)

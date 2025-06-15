@@ -1,5 +1,5 @@
 /*
- * @file numerics_device.hpp
+ * @file numerics_device_pc.hpp
  *
  * @copyright Copyright (C) 2025 Enrico Degregori <enrico.degregori@gmail.com>
  *
@@ -27,8 +27,8 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef CANARD_KERNELS_NUMERICS_DEVICE_HPP
-#define CANARD_KERNELS_NUMERICS_DEVICE_HPP
+#ifndef CANARD_KERNELS_NUMERICS_DEVICE_PC_HPP
+#define CANARD_KERNELS_NUMERICS_DEVICE_PC_HPP
 
 #include "common/parameters.hpp"
 #include "common/data_types.hpp"
@@ -318,6 +318,8 @@ CANARD_DEVICE void deriv_kernel_1d_impl(Type *infield,
     unsigned int face_idx = blockIdx.y * face_stride + blockIdx.x;
     unsigned int face_size = get_face_size<Axis>(dcomp_info);
 
+    Type * recv_variable = recv + variable_id * 2 * 2 * face_size;
+
     // load input field in shared memory
     sx[thread_local_idx] = infield[gmem_idx];
     __syncthreads();
@@ -328,7 +330,7 @@ CANARD_DEVICE void deriv_kernel_1d_impl(Type *infield,
                  nstart, nend,
                  h_1,
                  sa, sb, sc, srhs, sx,
-                 recv, pbci);
+                 recv_variable, pbci);
 
     __syncthreads();
 

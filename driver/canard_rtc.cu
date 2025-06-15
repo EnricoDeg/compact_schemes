@@ -55,6 +55,8 @@ int main()
 
     numerics_instance.template deriv1d_compile<ax>(dcomp_info, nstart, nend);
 
+    numerics_instance.template fill_buffer_compile<ax>();
+
     constexpr unsigned int NStreams = 1;
     CUstream streams[NStreams];
     for(unsigned int i = 0; i < NStreams; ++i)
