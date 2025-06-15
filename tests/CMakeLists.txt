@@ -24,6 +24,10 @@ FetchContent_Declare(
 option(INSTALL_GTEST "Enable installation of googletest." OFF)
 FetchContent_MakeAvailable(googletest)
 
+# Find nvrtc and cuda driver libs
+FIND_LIBRARY(NVRTC_LIB nvrtc PATHS "${CUDA_TOOLKIT_ROOT_DIR}/lib64")
+FIND_LIBRARY(CUDA_DRIVER_LIB cuda PATHS "${CUDA_TOOLKIT_ROOT_DIR}/lib64/stubs")
+
 enable_testing()
 
 # physics
@@ -34,6 +38,22 @@ target_include_directories(test_physics PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(test_physics PRIVATE ${MPI_CXX_INCLUDE_DIRS})
 target_link_libraries(test_physics ${MPI_CXX_LIBRARIES} GTest::gtest_main)
 set_property(TARGET test_physics PROPERTY CUDA_STANDARD 17)
+
+# physics serial
+cuda_add_executable( test_physics_serial
+                     test_physics_serial.cu
+                   )
+target_include_directories(test_physics_serial PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test_physics_serial GTest::gtest_main)
+set_property(TARGET test_physics_serial PROPERTY CUDA_STANDARD 17)
+
+# numerics serial
+cuda_add_executable( test_numerics_serial
+                     test_numerics_serial.cu
+                   )
+target_include_directories(test_numerics_serial PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test_numerics_serial GTest::gtest_main ${NVRTC_LIB} ${CUDA_DRIVER_LIB})
+set_property(TARGET test_numerics_serial PROPERTY CUDA_STANDARD 17)
 
 # set(UNIT_TEST test_physics)
 # set(MPI_COMMAND mpirun -np 4 ${UNIT_TEST})
@@ -47,3 +67,5 @@ include(GoogleTest)
 set_property(TARGET test_physics
              PROPERTY CROSSCOMPILING_EMULATOR 'mpirun -n 2')
 gtest_discover_tests(test_physics)
+gtest_discover_tests(test_physics_serial)
+gtest_discover_tests(test_numerics_serial)
