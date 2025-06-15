@@ -108,9 +108,9 @@ CANARD_GLOBAL void calc_fluxes_pre_compute_kernel(Type *buffer,
         rr[1] = de_vgpr[2] + umf.y;
         rr[2] = de_vgpr[3] + umf.z;
 
-        ss[0] = xim_vgpr[0] * rr[0] + xim_vgpr[1] * rr[1] * xim_vgpr[2] * rr[2];
-        ss[1] = etm_vgpr[0] * rr[0] + etm_vgpr[1] * rr[1] * etm_vgpr[2] * rr[2];
-        ss[2] = zem_vgpr[0] * rr[0] + zem_vgpr[1] * rr[1] * zem_vgpr[2] * rr[2];
+        ss[0] = xim_vgpr[0] * rr[0] + xim_vgpr[1] * rr[1] + xim_vgpr[2] * rr[2];
+        ss[1] = etm_vgpr[0] * rr[0] + etm_vgpr[1] * rr[1] + etm_vgpr[2] * rr[2];
+        ss[2] = zem_vgpr[0] * rr[0] + zem_vgpr[1] * rr[1] + zem_vgpr[2] * rr[2];
 
         rr[0] = qa_vgpr[0] * ss[0];
         rr[1] = qa_vgpr[0] * ss[1];
@@ -169,7 +169,7 @@ CANARD_GLOBAL void calc_fluxes_pre_compute_kernel(Type *buffer,
             buffer[thread_id + j * size + 3 * size * NumberOfSpatialDims] = rr[j];
         });
 
-        de_vgpr[4] = qa_vgpr[4] * p_vgpr;
+        de_vgpr[4] = qa_vgpr[4] + p_vgpr;
         rr[0] = de_vgpr[4] * ss[0] -
             p_vgpr * (umf.x * xim_vgpr[0] + umf.y * xim_vgpr[1] + umf.z * xim_vgpr[2]);
         rr[1] = de_vgpr[4] * ss[1] -
