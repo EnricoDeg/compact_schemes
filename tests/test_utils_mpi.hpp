@@ -1,5 +1,5 @@
 /*
- * @file test_utils.hpp
+ * @file test_utils_mpi.hpp
  *
  * @copyright Copyright (C) 2025 Enrico Degregori <enrico.degregori@gmail.com>
  *
@@ -27,26 +27,26 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef CANARD_TEST_UTILS_HPP
-#define CANARD_TEST_UTILS_HPP
+#ifndef CANARD_TEST_UTILS_MPI_HPP
+#define CANARD_TEST_UTILS_MPI_HPP
 
-#include <random>
-
+#include <mpi.h>
 #include <gtest/gtest.h>
 
-float * allocate_and_fill_random(unsigned int size, float min_value, float max_value)
+class MPIEnvironment : public ::testing::Environment
 {
-    float * data = (float *)malloc(size * sizeof(float));
-    std::random_device rd;
-    std::mt19937 e2(rd());
-    std::uniform_real_distribution<> dist(min_value, max_value);
-
-    for(unsigned int i = 0; i < size; ++i)
-    {
-        data[i] = dist(e2);
-    }
-    return data;
-}
-
+public:
+  virtual void SetUp() {
+    char** argv;
+    int argc = 0;
+    int mpiError = MPI_Init(&argc, &argv);
+    ASSERT_FALSE(mpiError);
+  }
+  virtual void TearDown() {
+    int mpiError = MPI_Finalize();
+    ASSERT_FALSE(mpiError);
+  }
+  virtual ~MPIEnvironment() {}
+};
 
 #endif
