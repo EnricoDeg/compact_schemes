@@ -58,6 +58,7 @@ void compile_program(nvrtcProgram prog, const char *opts[], int num_opts)
     check_cuda_rtc( nvrtcGetProgramLogSize(prog, &logSize) );
     char *log = new char[logSize];
     check_cuda_rtc( nvrtcGetProgramLog(prog, log) );
+    std::cout << log << std::endl;
     delete[] log;
     if (compileResult != NVRTC_SUCCESS) {
         exit(1);
