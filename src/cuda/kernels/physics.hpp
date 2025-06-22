@@ -30,7 +30,6 @@
 #ifndef CANARD_KERNELS_PHYSICS_HPP
 #define CANARD_KERNELS_PHYSICS_HPP
 
-#include "common.hpp"
 #include "common/data_types.hpp"
 #include "common/parameters.hpp"
 
@@ -38,7 +37,7 @@
 #include "cuda/kernels/common.hpp"
 #include "cuda/kernels/transforms.hpp"
 #include "cuda/kernels/reductionShMem.hpp"
-#include "functional.hpp"
+#include "cuda/kernels/functional.hpp"
 
 template<bool EnableViscous, typename Type>
 CANARD_GLOBAL void calc_fluxes_pre_compute_kernel(Type *buffer,

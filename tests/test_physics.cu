@@ -39,7 +39,7 @@
 
 #include "cuda/common.hpp"
 
-#include "physics.hpp"
+#include "physics_pc.hpp"
 
 float maxval(float *data, unsigned int size)
 {

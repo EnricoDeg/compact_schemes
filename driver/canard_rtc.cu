@@ -8,7 +8,9 @@
 #include "cuda/driver.hpp"
 #include "mpi/check.hpp"
 #include "mpi/driver.hpp"
+#include "grid.hpp"
 #include "numerics_rtc.hpp"
+#include "physics_rtc.hpp"
 
 // Main program
 int main()
@@ -24,7 +26,7 @@ int main()
     int world_rank;
     check_mpi(MPI_Comm_rank(MPI_COMM_WORLD, &world_rank));
 
-    static constexpr unsigned int ax = 2;
+    static constexpr unsigned int ax = 0;
 
     // Subdomain info
     t_dcomp dcomp_info;
@@ -33,49 +35,81 @@ int main()
     dcomp_info.lze = 64;
     dcomp_info.lmx = dcomp_info.lxi * dcomp_info.let * dcomp_info.lze;
 
-    float *infield = (float *)malloc(dcomp_info.lmx * sizeof(float));
-    float *d_infield;
-    check_cuda( cudaMalloc(&d_infield, dcomp_info.lmx * sizeof(float)) );
+    // qa
+    float * d_qa;
+    cudaMalloc(&d_qa, NumberOfSpatialDims * dcomp_info.lmx * sizeof(float));
 
-    float *outfield = (float *)malloc(dcomp_info.lmx * sizeof(float));
-    float *d_outfield;
-    check_cuda( cudaMalloc(&d_outfield, dcomp_info.lmx * sizeof(float)) );
+    // de
+    float * d_de;
+    cudaMalloc(&d_de, NumberOfSpatialDims * dcomp_info.lmx * sizeof(float));
 
-    for(unsigned int i = 0; i < dcomp_info.lmx; ++i)
+    // pressure
+    float * d_pressure;
+    cudaMalloc(&d_pressure, dcomp_info.lmx * sizeof(float));
+
+    // umf
+    t_point<float> umf = {.x = 0.3, .y = 0.0, .z = 0.0 };
+
+    unsigned int ndf[2][3];
+    for(unsigned int i = 0; i < 2; ++i)
+        for(unsigned int j = 0; j < 3; ++j)
+            ndf[i][j] = 0;
+    if(world_rank == 0)
     {
-        infield[i] = i;
+        ndf[1][ax] = 1;
     }
-    check_cuda( cudaMemcpy(d_infield, infield,
-        dcomp_info.lmx * sizeof(float), cudaMemcpyHostToDevice));
+    else if(world_rank == 1)
+    {
+        ndf[0][ax] = 1;
+    }
 
-    int nstart = 0;
-    int nend   = 0;
+    int mcd[2][3];
+    for(unsigned int i = 0; i < 2; ++i)
+        for(unsigned int j = 0; j < 3; ++j)
+            mcd[i][j] = -1;
+
+    if(world_rank == 0)
+    {
+        mcd[1][ax] = 1;
+    }
+    else if(world_rank == 1)
+    {
+        mcd[0][ax] = 0;
+    }
+
+    auto grid_instance = grid<float>(dcomp_info);
 
     auto numerics_instance = numerics_rtc<float>(dcomp_info);
 
-    numerics_instance.template deriv1d_compile<ax>(dcomp_info, nstart, nend);
+    auto physics_instance  = physics_rtc<true, float>(dcomp_info, ndf, &numerics_instance);
 
-    numerics_instance.template fill_buffer_compile<ax>();
+    // setup derivatives
+    numerics_instance.deriv_setup();
 
-    constexpr unsigned int NStreams = 1;
+    constexpr unsigned int NStreams = 5;
     CUstream streams[NStreams];
     for(unsigned int i = 0; i < NStreams; ++i)
     {
        check_cuda_driver(cuStreamCreate ( &streams[i], CU_STREAM_NON_BLOCKING ));
     }
 
-    // setup derivatives
-    numerics_instance.deriv_setup();
-
     check_mpi(MPI_Barrier(MPI_COMM_WORLD));
 
+    // compute fluxes
     for(unsigned int i = 0; i < 10; ++i)
     {
-        numerics_instance.template deriv1d<ax>(d_infield,
-            d_outfield,
-            dcomp_info,
-            0,
-            streams);
+        physics_instance.calc_fluxes(d_qa,
+                                    d_pressure,
+                                    d_de,
+                                    grid_instance.xim,
+                                    grid_instance.etm,
+                                    grid_instance.zem,
+                                    dcomp_info,
+                                    umf,
+                                    ndf,
+                                    mcd,
+                                    &numerics_instance,
+                                    &streams[0]);
     }
 
     for(unsigned int i = 0; i < NStreams; ++i)
@@ -83,31 +117,31 @@ int main()
         check_cuda_driver( cuStreamDestroy ( streams[i] ));
     }
 
-    check_cuda( cudaMemcpy(outfield, d_outfield,
-        dcomp_info.lmx * sizeof(float), cudaMemcpyDeviceToHost) );
+    // check_cuda( cudaMemcpy(outfield, d_outfield,
+    //     dcomp_info.lmx * sizeof(float), cudaMemcpyDeviceToHost) );
 
-    float solution;
-    if constexpr(ax == 0)
-    {
-        solution = infield[1] - infield[0];
-    }
-    else if constexpr(ax == 1)
-    {
-        solution = infield[dcomp_info.lxi] - infield[0];
-    }
-    else if constexpr(ax == 2)
-    {
-        solution = infield[dcomp_info.lxi * dcomp_info.let] - infield[0];
-    }
-    for(unsigned int i = 0; i < dcomp_info.lmx; ++i)
-    {
-        if(std::abs(outfield[i] - solution) / solution > 1e-6)
-        {
-            std::cout << std::abs(outfield[i] - solution) / solution << std::endl;
-            std::cout << i << ": out = " << outfield[i] << " -- ref = " << solution << std::endl;
-            exit(1);
-        }
-    }
+    // float solution;
+    // if constexpr(ax == 0)
+    // {
+    //     solution = infield[1] - infield[0];
+    // }
+    // else if constexpr(ax == 1)
+    // {
+    //     solution = infield[dcomp_info.lxi] - infield[0];
+    // }
+    // else if constexpr(ax == 2)
+    // {
+    //     solution = infield[dcomp_info.lxi * dcomp_info.let] - infield[0];
+    // }
+    // for(unsigned int i = 0; i < dcomp_info.lmx; ++i)
+    // {
+    //     if(std::abs(outfield[i] - solution) / solution > 1e-6)
+    //     {
+    //         std::cout << std::abs(outfield[i] - solution) / solution << std::endl;
+    //         std::cout << i << ": out = " << outfield[i] << " -- ref = " << solution << std::endl;
+    //         exit(1);
+    //     }
+    // }
 
     return 0;
 }
