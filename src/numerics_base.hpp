@@ -90,14 +90,21 @@ struct numerics_base
     }
 
     // 2D infield
+    template<
+    typename StreamType,
+    typename SyncFunction
+    >
     void mpigo(t_dcomp dcomp_info,
                unsigned int ndf[2][3],
                int mcd[2][3],
                int itag,
                unsigned int variable_id,
-               cudaStream_t *stream)
+               StreamType *stream,
+               SyncFunction sync)
     {
-        cudaStreamSynchronize(*stream);
+        sync(stream);
+        // cudaStreamSynchronize(*stream);
+
         // Get the rank of the process
         auto exchange_instance = exchange<Type>();
 
