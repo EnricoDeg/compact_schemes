@@ -186,7 +186,7 @@ struct numerics_rtc : public numerics_base<Type>
         deriv2d_compiler[Axis] = deriv2d_instance;
     }
 
-    template<unsigned int Axis>
+    template<unsigned int Axis, unsigned int FaceId>
     void fill_buffer_compile()
     {
 
@@ -207,7 +207,7 @@ struct numerics_rtc : public numerics_base<Type>
                                                std::string("fill_buffer.cu"),
                                                kernel_name_vec,
                                                kernel_opts);
-        fill_buffer_compiler[Axis] = fill_buffer_instance;
+        fill_buffer_compiler[Axis + FaceId * NumberOfSpatialDims] = fill_buffer_instance;
     }
 
     // 1D field
@@ -292,7 +292,7 @@ struct numerics_rtc : public numerics_base<Type>
 
         TIME_RTC(blockPerGridX, blockPerGridY, 1,
             blockSize, 1, 1,
-            0, *stream, false, kernel, args);
+            0, *stream, true, kernel, args);
     }
 
     template<unsigned int min_value, unsigned int max_value>
@@ -334,30 +334,47 @@ struct numerics_rtc : public numerics_base<Type>
                 unsigned int infield_offset = nzk * dcomp_info.lmx +
                     m * dcomp_info.lmx * NumberOfSpatialDims;
 
-                host::static_for<0, 2, 1>{}([&](auto ip)
                 {
+                    const int ip = 0;
                     const int istart = ip * (dim - 1);
                     const int increment = 1 - 2 * ip;
                     const int buffer_offset = ip * 2 * face_size;
                     if(ndf[ip][nn] == 1)
                     {
-                        fill_buffer(infield + infield_offset,
-                                    send,
-                                    pbco,
-                                    dcomp_info,
-                                    istart,
-                                    increment,
-                                    buffer_offset,
-                                    &streams[m]);
+                        fill_buffer<nn, ip>(infield + infield_offset,
+                                            send,
+                                            pbco,
+                                            dcomp_info,
+                                            istart,
+                                            increment,
+                                            buffer_offset,
+                                            &streams[m]);
                     }
-                });
+                }
+                {
+                    const int ip = 1;
+                    const int istart = ip * (dim - 1);
+                    const int increment = 1 - 2 * ip;
+                    const int buffer_offset = ip * 2 * face_size;
+                    if(ndf[ip][nn] == 1)
+                    {
+                        fill_buffer<nn, ip>(infield + infield_offset,
+                                            send,
+                                            pbco,
+                                            dcomp_info,
+                                            istart,
+                                            increment,
+                                            buffer_offset,
+                                            &streams[m]);
+                    }
+                }
             });
         });
     }
 
     private:
 
-    template<unsigned int Axis>
+    template<unsigned int Axis, unsigned int FaceId>
     void fill_buffer(Type *infield,
                      Type *buffer,
                      Type *pbco,
@@ -371,7 +388,6 @@ struct numerics_rtc : public numerics_base<Type>
 
         unsigned int blockSize;
         unsigned int blockPerGridX;
-        unsigned int blockPerGridY;
         if constexpr(Axis == 0)
         {
             blockSize = dcomp_info.let;
@@ -388,19 +404,19 @@ struct numerics_rtc : public numerics_base<Type>
             blockPerGridX = dcomp_info.let;
         }
 
-        CUfunction kernel = fill_buffer_compiler[Axis]->get_kernel(0);
+        CUfunction kernel = fill_buffer_compiler[Axis + FaceId * NumberOfSpatialDims]->get_kernel(0);
         void *args[] = { &infield, &buffer, &pbco,
             &dcomp_info, &istart,
             &increment, &buffer_offset };
 
         TIME_RTC(blockPerGridX, 1, 1,
             blockSize, 1, 1,
-            0, *stream, false, kernel, args);
+            0, *stream, true, kernel, args);
     }
 
     rt_compiler * deriv1d_compiler[NumberOfSpatialDims];
     rt_compiler * deriv2d_compiler[NumberOfSpatialDims];
-    rt_compiler * fill_buffer_compiler[NumberOfSpatialDims];
+    rt_compiler * fill_buffer_compiler[2 * NumberOfSpatialDims];
 };
 
 #endif
