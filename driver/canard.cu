@@ -3,10 +3,11 @@
 #include <mpi.h>
 
 #include "common/parameters.hpp"
+#include "domdcomp.hpp"
 #include "numerics_pc.hpp"
 #include "gcbc.hpp"
 #include "grid.hpp"
-#include "physics.hpp"
+#include "physics_pc.hpp"
 
 // Main program
 int main()
@@ -22,12 +23,17 @@ int main()
     int world_rank;
     check_mpi(MPI_Comm_rank(MPI_COMM_WORLD, &world_rank));
 
+    auto domdcomp_instance = domdcomp(0);
+    domdcomp_instance.read_config();
+    domdcomp_instance.go();
+    domdcomp_instance.show();
+
     static constexpr unsigned int ax = 0;
 
     // Subdomain info
     t_dcomp dcomp_info;
-    dcomp_info.lxi = 128;
-    dcomp_info.let = 256;
+    dcomp_info.lxi = 1024;
+    dcomp_info.let = 64;
     dcomp_info.lze = 64;
     dcomp_info.lmx = dcomp_info.lxi * dcomp_info.let * dcomp_info.lze;
 
