@@ -11,6 +11,8 @@
 #include "grid.hpp"
 #include "numerics_rtc.hpp"
 #include "physics_rtc.hpp"
+#include "domdcomp.hpp"
+#include "IO.hpp"
 
 // Main program
 int main()
@@ -26,13 +28,19 @@ int main()
     int world_rank;
     check_mpi(MPI_Comm_rank(MPI_COMM_WORLD, &world_rank));
 
+    // domain decomposition
+    auto domdcomp_instance = domdcomp(0);
+    domdcomp_instance.read_config();
+    domdcomp_instance.go();
+    domdcomp_instance.show();
+
     static constexpr unsigned int ax = 0;
 
     // Subdomain info
     t_dcomp dcomp_info;
-    dcomp_info.lxi = 1024;
-    dcomp_info.let = 64;
-    dcomp_info.lze = 64;
+    dcomp_info.lxi = domdcomp_instance.lxi + 1;
+    dcomp_info.let = domdcomp_instance.let + 1;
+    dcomp_info.lze = domdcomp_instance.lze + 1;
     dcomp_info.lmx = dcomp_info.lxi * dcomp_info.let * dcomp_info.lze;
 
     // qa
@@ -63,25 +71,18 @@ int main()
         ndf[0][ax] = 1;
     }
 
-    int mcd[2][3];
-    for(unsigned int i = 0; i < 2; ++i)
-        for(unsigned int j = 0; j < 3; ++j)
-            mcd[i][j] = -1;
-
-    if(world_rank == 0)
-    {
-        mcd[1][ax] = 1;
-    }
-    else if(world_rank == 1)
-    {
-        mcd[0][ax] = 0;
-    }
-
-    auto grid_instance = grid<float>(dcomp_info);
+    // generate grid
+    auto grid_instance = grid<float>(domdcomp_instance);
+    grid_instance.read_config();
+    grid_instance.generate(domdcomp_instance);
 
     auto numerics_instance = numerics_rtc<float>(dcomp_info);
 
     auto physics_instance  = physics_rtc<true, float>(dcomp_info, ndf, &numerics_instance);
+
+    std::vector<std::string> variable_names{"x", "y", "z", "density", "u", "v", "w", "p"};
+    auto io_instance = IOwriter(5, domdcomp_instance, variable_names);
+    // io_instance.go(domdcomp_instance, grid_instance, data);
 
     // setup derivatives
     numerics_instance.deriv_setup();
@@ -107,7 +108,7 @@ int main()
                                     dcomp_info,
                                     umf,
                                     ndf,
-                                    mcd,
+                                    domdcomp_instance.mcd,
                                     &numerics_instance,
                                     &streams[0]);
     }
@@ -116,32 +117,6 @@ int main()
     {
         check_cuda_driver( cuStreamDestroy ( streams[i] ));
     }
-
-    // check_cuda( cudaMemcpy(outfield, d_outfield,
-    //     dcomp_info.lmx * sizeof(float), cudaMemcpyDeviceToHost) );
-
-    // float solution;
-    // if constexpr(ax == 0)
-    // {
-    //     solution = infield[1] - infield[0];
-    // }
-    // else if constexpr(ax == 1)
-    // {
-    //     solution = infield[dcomp_info.lxi] - infield[0];
-    // }
-    // else if constexpr(ax == 2)
-    // {
-    //     solution = infield[dcomp_info.lxi * dcomp_info.let] - infield[0];
-    // }
-    // for(unsigned int i = 0; i < dcomp_info.lmx; ++i)
-    // {
-    //     if(std::abs(outfield[i] - solution) / solution > 1e-6)
-    //     {
-    //         std::cout << std::abs(outfield[i] - solution) / solution << std::endl;
-    //         std::cout << i << ": out = " << outfield[i] << " -- ref = " << solution << std::endl;
-    //         exit(1);
-    //     }
-    // }
 
     return 0;
 }

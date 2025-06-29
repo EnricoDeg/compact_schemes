@@ -4,6 +4,7 @@
 
 #include "common/parameters.hpp"
 #include "domdcomp.hpp"
+#include "IO.hpp"
 #include "numerics_pc.hpp"
 #include "gcbc.hpp"
 #include "grid.hpp"
@@ -23,6 +24,7 @@ int main()
     int world_rank;
     check_mpi(MPI_Comm_rank(MPI_COMM_WORLD, &world_rank));
 
+    // domain decomposition
     auto domdcomp_instance = domdcomp(0);
     domdcomp_instance.read_config();
     domdcomp_instance.go();
@@ -32,9 +34,9 @@ int main()
 
     // Subdomain info
     t_dcomp dcomp_info;
-    dcomp_info.lxi = 1024;
-    dcomp_info.let = 64;
-    dcomp_info.lze = 64;
+    dcomp_info.lxi = domdcomp_instance.lxi + 1;
+    dcomp_info.let = domdcomp_instance.let + 1;
+    dcomp_info.lze = domdcomp_instance.lze + 1;
     dcomp_info.lmx = dcomp_info.lxi * dcomp_info.let * dcomp_info.lze;
 
     // Spatial distance
@@ -100,50 +102,18 @@ int main()
         ndf[0][ax] = 1;
     }
 
-    // mcd indicates the pair process for each face. If there is no
-    // halo exchange on a face, it is set to -1
-    int mcd[2][3];
-    for(unsigned int ip = 0; ip < 2; ++ip)
-    {
-        for(unsigned int nn = 0; nn < 3; ++nn)
-        {
-            mcd[ip][nn] = -1;
-        }
-    }
+    // generate grid
+    auto grid_instance = grid<float>(domdcomp_instance);
+    grid_instance.read_config();
+    grid_instance.generate(domdcomp_instance);
 
-    if(world_rank == 0)
-    {
-        mcd[1][ax] = 1;
-    }
-    else if(world_rank == 1)
-    {
-        mcd[0][ax] = 0;
-    }
-
-    // nbc indicates the BC type for each face
-    int nbc[2][3];
-    for(unsigned int ip = 0; ip < 2; ++ip)
-    {
-        for(unsigned int nn = 0; nn < 3; ++nn)
-        {
-            nbc[ip][nn] = BC_PERIODIC;
-        }
-    }
-    if(world_rank == 0)
-    {
-        nbc[0][ax] = BC_NON_REFLECTIVE;
-        nbc[1][ax] = BC_INTER_SUBDOMAINS;
-    }
-    else if(world_rank == 1)
-    {
-        nbc[0][ax] = BC_INTER_SUBDOMAINS;
-        nbc[1][ax] = BC_NON_REFLECTIVE;
-    }
-
-    auto grid_instance = grid<float>(dcomp_info);
     auto physics_instance = physics<true, float>(dcomp_info);
 
     auto numerics_instance = numerics_pc<float>(dcomp_info);
+
+    std::vector<std::string> variable_names{"x", "y", "z", "density", "u", "v", "w", "p"};
+    auto io_instance = IOwriter(5, domdcomp_instance, variable_names);
+    // io_instance.go(domdcomp_instance, grid_instance, data);
 
     // setup derivatives
     numerics_instance.deriv_setup();
@@ -218,13 +188,13 @@ int main()
             // compute viscous shear stress
             physics_instance.calc_viscous_shear_stress(d_de, d_ss,
                grid_instance.xim, grid_instance.etm, grid_instance.zem,
-               d_yaco, dcomp_info, h_1, ndf, mcd, &numerics_instance, &stream[0]);
+               d_yaco, dcomp_info, h_1, ndf, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
 
             // compute fluxes
             physics_instance.calc_fluxes(d_qa, d_pressure, d_de,
                                          grid_instance.xim, grid_instance.etm, grid_instance.zem,
                                          dcomp_info, umf,
-                                         h_1, ndf, mcd, &numerics_instance, &stream[0]);
+                                         h_1, ndf, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
 
             float dtwi = 1 / dt;
 
@@ -233,7 +203,7 @@ int main()
             // gcbc_go(numerics_instance.drva_buffer, d_cm, gcbc_instance.drvb,
             //         d_qa, d_de, d_pressure, d_yaco, gcbc_instance.sbcc,
             //         umf, dudtmf, dcomp_info, dtwi,
-            //         nbc, mcd);
+            //         domdcomp_instance.nbc, mcd);
 
             // sponge condition
 
@@ -244,7 +214,7 @@ int main()
 
             // wall temperature / velocity condition
 
-            // wall_condition_update(d_qa, d_npex, umf, dcomp_info, nbc);
+            // wall_condition_update(d_qa, d_npex, umf, dcomp_info, domdcomp_instance.nbc);
         }
 
         // advance in time
