@@ -31,6 +31,7 @@
 #define CANARD_DOMDCOMP_HPP
 
 #include <iostream>
+#include <cassert>
 #include "common/parameters.hpp"
 #include "mpi/check.hpp"
 
@@ -62,12 +63,14 @@ struct domdcomp
 
     void read_config()
     {
-        nbpc[0][0] = 2;
+        int nprocs;
+        check_mpi( MPI_Comm_size(MPI_COMM_WORLD, &nprocs) );
+        nbpc[0][0] = nprocs;
         nbpc[1][0] = 1;
         nbpc[2][0] = 1;
-        lximb[0] = 64;
-        letmb[0] = 64;
-        lzemb[0] = 16;
+        lximb[0] = 2047;
+        letmb[0] = 63;
+        lzemb[0] = 63;
         for(unsigned int i = 0; i < 6*(nblocks+1); ++i)
         {
             nbbc[i] =  10;
@@ -281,19 +284,22 @@ struct domdcomp
     }
 
     int idsd3(int i, int j, int k, int mm, int nn) {
-        switch(nn) {
-            case 0:
-                return mo[mm] + ( k * nbpc[1][mm] + j ) *
-                                nbpc[0][mm] + i; 
-                break;
-            case 1:
-                return mo[mm] + ( j * nbpc[1][mm] + i ) *
+
+        assert(nn < 3);
+        if(nn == 0)
+        {
+            return mo[mm] + ( k * nbpc[1][mm] + j ) *
+                                nbpc[0][mm] + i;
+        }
+        else if(nn == 1)
+        {
+            return mo[mm] + ( j * nbpc[1][mm] + i ) *
                                 nbpc[0][mm] + k;
-                break;
-            case 2:
-                return mo[mm] + ( i * nbpc[1][mm] + k ) *
+        }
+        else
+        {
+            return mo[mm] + ( i * nbpc[1][mm] + k ) *
                                 nbpc[0][mm] + j;
-                break;
         }
     }
 
