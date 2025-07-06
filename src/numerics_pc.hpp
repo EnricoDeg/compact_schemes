@@ -60,8 +60,10 @@ struct numerics_pc : public numerics_base<Type>
     using Base::pbco;
     using Base::pbci;
     using Base::mpigo;
+    using Base::ndf;
 
-    numerics_pc(t_dcomp dcomp_info) : numerics_base<Type>(dcomp_info)
+    numerics_pc(t_dcomp dcomp_info, int nbc[2][3])
+        : numerics_base<Type>(dcomp_info, nbc)
     {
     }
 
@@ -170,7 +172,6 @@ struct numerics_pc : public numerics_base<Type>
     // 1D infield
     void mpigo(Type *infield,
                t_dcomp dcomp_info,
-               unsigned int ndf[2][3],
                int mcd[2][3],
                int itag)
     {
@@ -234,7 +235,6 @@ struct numerics_pc : public numerics_base<Type>
     void fill_buffers(Type *infield,
                       int nrt,
                       t_dcomp dcomp_info,
-                      unsigned int ndf[2][3],
                       cudaStream_t *streams)
     {
         // Get the rank of the process

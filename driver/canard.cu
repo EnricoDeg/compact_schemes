@@ -45,8 +45,6 @@ int main()
     domdcomp_instance.go();
     domdcomp_instance.show();
 
-    static constexpr unsigned int ax = 0;
-
     // Subdomain info
     t_dcomp dcomp_info;
     dcomp_info.lxi = domdcomp_instance.lxi + 1;
@@ -93,24 +91,6 @@ int main()
     int * d_npex;
     cudaMalloc(&d_npex, dcomp_info.lmx * sizeof(int));
 
-    // ndf is 1 if halo exchange is needed, otherwise is 0
-    unsigned int ndf[2][3];
-    for(unsigned int ip = 0; ip < 2; ++ip)
-    {
-        for(unsigned int nn = 0; nn < 3; ++nn)
-        {
-            ndf[ip][nn] = 0;
-        }
-    }
-    if(world_rank == 0)
-    {
-        ndf[1][ax] = 1;
-    }
-    else if(world_rank == 1)
-    {
-        ndf[0][ax] = 1;
-    }
-
     // generate grid
     YAML::Node grid_yaml = config["grid"];
     auto grid_instance = grid<float>(domdcomp_instance);
@@ -121,7 +101,7 @@ int main()
     auto physics_instance = physics<true, float>(dcomp_info);
     physics_instance.read_config(physics_yaml);
 
-    auto numerics_instance = numerics_pc<float>(dcomp_info);
+    auto numerics_instance = numerics_pc<float>(dcomp_info, domdcomp_instance.nbc);
 
     std::vector<std::string> variable_names{"x", "y", "z", "density", "u", "v", "w", "p"};
     auto io_instance = IOwriter(5, domdcomp_instance, variable_names);
@@ -199,13 +179,13 @@ int main()
             // compute viscous shear stress
             physics_instance.calc_viscous_shear_stress(d_de, d_ss,
                grid_instance.xim, grid_instance.etm, grid_instance.zem,
-               d_yaco, dcomp_info, h_1, ndf, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
+               d_yaco, dcomp_info, h_1, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
 
             // compute fluxes
             physics_instance.calc_fluxes(d_qa, d_pressure, d_de,
                                          grid_instance.xim, grid_instance.etm, grid_instance.zem,
                                          dcomp_info,
-                                         h_1, ndf, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
+                                         h_1, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
 
             float dtwi = 1 / dt;
 

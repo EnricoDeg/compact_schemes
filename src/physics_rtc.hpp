@@ -58,26 +58,25 @@ struct physics_rtc : public physics_base<EnableViscous, Type>
     using Base::movef;
 
     physics_rtc(t_dcomp dcomp_info,
-                unsigned int ndf[2][3],
                 numerics_rtc<Type> *numerics_instance)
         : physics_base<EnableViscous, Type>(dcomp_info)
     {
         // compile numerics kernels
         host::static_for<0, 3, 1>{}([&](auto nn)
         {
-            if(ndf[0][nn] == 1)
+            if(numerics_instance->ndf[0][nn] == 1)
             {
                 numerics_instance->template fill_buffer_compile<nn, 0>();
             }
 
-            if(ndf[1][nn] == 1)
+            if(numerics_instance->ndf[1][nn] == 1)
             {
                 numerics_instance->template fill_buffer_compile<nn, 1>();
             }
 
             numerics_instance->template deriv2d_compile<nn>(dcomp_info,
-                                                            ndf[0][nn],
-                                                            ndf[1][nn]);
+                                                            numerics_instance->ndf[0][nn],
+                                                            numerics_instance->ndf[1][nn]);
         });
 
         // compile physics kernels
@@ -101,7 +100,6 @@ struct physics_rtc : public physics_base<EnableViscous, Type>
                      Type *etm,
                      Type *zem,
                      t_dcomp dcomp_info,
-                     unsigned int ndf[2][3],
                      int mcd[2][3],
                      numerics_rtc<Type> *numerics_instance,
                      CUstream *streams)
@@ -122,14 +120,12 @@ struct physics_rtc : public physics_base<EnableViscous, Type>
         numerics_instance->template fill_buffers<0, NumberOfVariables>(buffer,
                                                                        nrall,
                                                                        dcomp_info,
-                                                                       ndf,
                                                                        streams);
 
         host::static_for<0, NumberOfVariables, 1>{}([&](auto m)
         {
             // Halo Exchange
             numerics_instance->mpigo(dcomp_info,
-                                     ndf,
                                      mcd,
                                      m + 1,
                                      m,

@@ -85,7 +85,6 @@ struct physics : public physics_base<EnableViscous, Type>
                      Type *xim, Type *etm, Type *zem,
                      t_dcomp dcomp_info,
                      Type h_1,
-                     unsigned int ndf[2][3],
                      int mcd[2][3],
                      numerics_pc<Type> *numerics_instance,
                      cudaStream_t *streams)
@@ -101,14 +100,12 @@ struct physics : public physics_base<EnableViscous, Type>
         numerics_instance->template fill_buffers<0, NumberOfVariables>(buffer,
                                                                        nrall,
                                                                        dcomp_info,
-                                                                       ndf,
                                                                        streams);
 
         host::static_for<0, NumberOfVariables, 1>{}([&](auto m)
         {
             // Halo Exchange
             numerics_instance->mpigo(dcomp_info,
-                                     ndf,
                                      mcd,
                                      m + 1,
                                      m,
@@ -120,8 +117,8 @@ struct physics : public physics_base<EnableViscous, Type>
             numerics_instance->template deriv2d<0>(buffer + offset,
                                                    buffer_deriv + offset,
                                                    h_1,
-                                                   ndf[0][0],
-                                                   ndf[1][0],
+                                                   numerics_instance->ndf[0][0],
+                                                   numerics_instance->ndf[1][0],
                                                    dcomp_info,
                                                    m,
                                                    0,
@@ -130,8 +127,8 @@ struct physics : public physics_base<EnableViscous, Type>
             numerics_instance->template deriv2d<1>(buffer + offset,
                                                    buffer_deriv + offset,
                                                    h_1,
-                                                   ndf[0][1],
-                                                   ndf[1][1],
+                                                   numerics_instance->ndf[0][1],
+                                                   numerics_instance->ndf[1][1],
                                                    dcomp_info,
                                                    m,
                                                    1,
@@ -140,8 +137,8 @@ struct physics : public physics_base<EnableViscous, Type>
             numerics_instance->template deriv2d<2>(buffer + offset,
                                                    buffer_deriv + offset,
                                                    h_1,
-                                                   ndf[0][2],
-                                                   ndf[1][2],
+                                                   numerics_instance->ndf[0][2],
+                                                   numerics_instance->ndf[1][2],
                                                    dcomp_info,
                                                    m,
                                                    2,
@@ -161,7 +158,6 @@ struct physics : public physics_base<EnableViscous, Type>
                                    Type *yaco,
                                    t_dcomp dcomp_info,
                                    Type h_1,
-                                   unsigned int ndf[2][3],
                                    int mcd[2][3],
                                    numerics_pc<Type> *numerics_instance,
                                    cudaStream_t *streams)
@@ -176,14 +172,12 @@ struct physics : public physics_base<EnableViscous, Type>
         numerics_instance->template fill_buffers<1, NumberOfVariables>(buffer,
                                                                        nrall,
                                                                        dcomp_info,
-                                                                       ndf,
                                                                        streams);
 
         host::static_for<1, NumberOfVariables, 1>{}([&](auto m)
         {
             // Halo Exchange
             numerics_instance->mpigo(dcomp_info,
-                                     ndf,
                                      mcd,
                                      m + 1,
                                      m,
@@ -195,8 +189,8 @@ struct physics : public physics_base<EnableViscous, Type>
             numerics_instance->template deriv2d<2>(buffer + offset,
                                                    buffer_deriv + offset,
                                                    h_1,
-                                                   ndf[0][0],
-                                                   ndf[1][0],
+                                                   numerics_instance->ndf[0][0],
+                                                   numerics_instance->ndf[1][0],
                                                    dcomp_info,
                                                    m,
                                                    0,
@@ -205,8 +199,8 @@ struct physics : public physics_base<EnableViscous, Type>
             numerics_instance->template deriv2d<1>(buffer + offset,
                                                    buffer_deriv + offset,
                                                    h_1,
-                                                   ndf[0][1],
-                                                   ndf[1][1],
+                                                   numerics_instance->ndf[0][1],
+                                                   numerics_instance->ndf[1][1],
                                                    dcomp_info,
                                                    m,
                                                    0,
@@ -215,8 +209,8 @@ struct physics : public physics_base<EnableViscous, Type>
             numerics_instance->template deriv2d<0>(buffer + offset,
                                                    buffer_deriv + offset,
                                                    h_1,
-                                                   ndf[0][2],
-                                                   ndf[1][2],
+                                                   numerics_instance->ndf[0][2],
+                                                   numerics_instance->ndf[1][2],
                                                    dcomp_info,
                                                    m,
                                                    0,

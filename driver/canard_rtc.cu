@@ -50,8 +50,6 @@ int main()
     domdcomp_instance.go();
     domdcomp_instance.show();
 
-    static constexpr unsigned int ax = 0;
-
     // Subdomain info
     t_dcomp dcomp_info;
     dcomp_info.lxi = domdcomp_instance.lxi + 1;
@@ -71,29 +69,16 @@ int main()
     float * d_pressure;
     cudaMalloc(&d_pressure, dcomp_info.lmx * sizeof(float));
 
-    unsigned int ndf[2][3];
-    for(unsigned int i = 0; i < 2; ++i)
-        for(unsigned int j = 0; j < 3; ++j)
-            ndf[i][j] = 0;
-    if(world_rank == 0)
-    {
-        ndf[1][ax] = 1;
-    }
-    else if(world_rank == 1)
-    {
-        ndf[0][ax] = 1;
-    }
-
     // generate grid
     YAML::Node grid_yaml = config["grid"];
     auto grid_instance = grid<float>(domdcomp_instance);
     grid_instance.read_config(grid_yaml);
     grid_instance.generate(domdcomp_instance);
 
-    auto numerics_instance = numerics_rtc<float>(dcomp_info);
+    auto numerics_instance = numerics_rtc<float>(dcomp_info, domdcomp_instance.nbc);
 
     YAML::Node physics_yaml = config["physics"];
-    auto physics_instance  = physics_rtc<true, float>(dcomp_info, ndf, &numerics_instance);
+    auto physics_instance  = physics_rtc<true, float>(dcomp_info, &numerics_instance);
     physics_instance.read_config(physics_yaml);
 
     std::vector<std::string> variable_names{"x", "y", "z", "density", "u", "v", "w", "p"};
@@ -122,7 +107,6 @@ int main()
                                     grid_instance.etm,
                                     grid_instance.zem,
                                     dcomp_info,
-                                    ndf,
                                     domdcomp_instance.mcd,
                                     &numerics_instance,
                                     &streams[0]);

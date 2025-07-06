@@ -66,8 +66,16 @@ void test_deriv1d_rct()
 
     int nstart = 0;
     int nend   = 0;
+    int nbc[2][3];
+    for(unsigned int nn = 0; nn < NumberOfSpatialDims; ++nn)
+    {
+        for(unsigned int ip = 0; ip < NumberOfFaces; ++ip)
+        {
+            nbc[ip][nn] = BC_NON_REFLECTIVE;
+        }
+    }
 
-    auto numerics_instance = numerics_rtc<float>(dcomp_info);
+    auto numerics_instance = numerics_rtc<float>(dcomp_info, nbc);
 
     numerics_instance.template deriv1d_compile<Axis>(dcomp_info, nstart, nend);
 

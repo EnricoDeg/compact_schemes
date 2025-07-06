@@ -40,7 +40,7 @@
 template<typename Type>
 struct numerics_base
 {
-    numerics_base(t_dcomp dcomp_info)
+    numerics_base(t_dcomp dcomp_info, int nbc[2][3])
     {
         size_t face_size0 = dcomp_info.let * dcomp_info.lze;
         size_t face_size1 = dcomp_info.lxi * dcomp_info.lze;
@@ -69,6 +69,28 @@ struct numerics_base
 
         pbco = allocate_cuda<Type>(2 * lmd);
         pbci = allocate_cuda<Type>(2 * lmd);
+
+        // ndf is 1 if halo exchange is needed, otherwise is 0
+        for(unsigned int nn = 0; nn < NumberOfSpatialDims; ++nn)
+        {
+            for(unsigned int ip = 0; ip < NumberOfFaces; ++ip)
+            {
+                int nbck = nbc[ip][nn];
+                if(nbck == BC_NON_REFLECTIVE ||
+                   nbck == BC_WALL_INVISCID  ||
+                   nbck == BC_WALL_VISCOUS   ||
+                   nbck == BC_INTER_CURV     )
+                {
+                    ndf[ip][nn] = 0;
+                }
+                else if (nbck == BC_INTER_STRAIGHT   ||
+                         nbck == BC_INTER_SUBDOMAINS ||
+                         nbck == BC_PERIODIC         )
+                {
+                    ndf[ip][nn] = 1;
+                }
+            }
+        }
     }
 
     ~numerics_base()
@@ -95,7 +117,6 @@ struct numerics_base
     typename SyncFunction
     >
     void mpigo(t_dcomp dcomp_info,
-               unsigned int ndf[2][3],
                int mcd[2][3],
                int itag,
                unsigned int variable_id,
@@ -282,6 +303,7 @@ struct numerics_base
     Type *recv0, *recv1, *recv2;
     Type *recv_buffer[3];
     Type *pbco, *pbci;
+    unsigned int ndf[NumberOfFaces][NumberOfSpatialDims];
 
     private:
     int maxloc(Type *p, int size)
