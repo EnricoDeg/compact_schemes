@@ -84,7 +84,6 @@ struct physics : public physics_base<EnableViscous, Type>
                      Type *de,
                      Type *xim, Type *etm, Type *zem,
                      t_dcomp dcomp_info,
-                     Type h_1,
                      int mcd[2][3],
                      numerics_pc<Type> *numerics_instance,
                      cudaStream_t *streams)
@@ -116,7 +115,6 @@ struct physics : public physics_base<EnableViscous, Type>
             unsigned int offset = m * dcomp_info.lmx * NumberOfSpatialDims;
             numerics_instance->template deriv2d<0>(buffer + offset,
                                                    buffer_deriv + offset,
-                                                   h_1,
                                                    numerics_instance->ndf[0][0],
                                                    numerics_instance->ndf[1][0],
                                                    dcomp_info,
@@ -126,7 +124,6 @@ struct physics : public physics_base<EnableViscous, Type>
 
             numerics_instance->template deriv2d<1>(buffer + offset,
                                                    buffer_deriv + offset,
-                                                   h_1,
                                                    numerics_instance->ndf[0][1],
                                                    numerics_instance->ndf[1][1],
                                                    dcomp_info,
@@ -136,7 +133,6 @@ struct physics : public physics_base<EnableViscous, Type>
 
             numerics_instance->template deriv2d<2>(buffer + offset,
                                                    buffer_deriv + offset,
-                                                   h_1,
                                                    numerics_instance->ndf[0][2],
                                                    numerics_instance->ndf[1][2],
                                                    dcomp_info,
@@ -157,7 +153,6 @@ struct physics : public physics_base<EnableViscous, Type>
                                    Type *xim, Type *etm, Type *zem,
                                    Type *yaco,
                                    t_dcomp dcomp_info,
-                                   Type h_1,
                                    int mcd[2][3],
                                    numerics_pc<Type> *numerics_instance,
                                    cudaStream_t *streams)
@@ -188,7 +183,6 @@ struct physics : public physics_base<EnableViscous, Type>
             unsigned int offset = m * dcomp_info.lmx * NumberOfSpatialDims;
             numerics_instance->template deriv2d<2>(buffer + offset,
                                                    buffer_deriv + offset,
-                                                   h_1,
                                                    numerics_instance->ndf[0][0],
                                                    numerics_instance->ndf[1][0],
                                                    dcomp_info,
@@ -198,7 +192,6 @@ struct physics : public physics_base<EnableViscous, Type>
 
             numerics_instance->template deriv2d<1>(buffer + offset,
                                                    buffer_deriv + offset,
-                                                   h_1,
                                                    numerics_instance->ndf[0][1],
                                                    numerics_instance->ndf[1][1],
                                                    dcomp_info,
@@ -208,7 +201,6 @@ struct physics : public physics_base<EnableViscous, Type>
 
             numerics_instance->template deriv2d<0>(buffer + offset,
                                                    buffer_deriv + offset,
-                                                   h_1,
                                                    numerics_instance->ndf[0][2],
                                                    numerics_instance->ndf[1][2],
                                                    dcomp_info,

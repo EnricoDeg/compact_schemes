@@ -180,7 +180,6 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
                                        unsigned int face_size,
                                        int nstart,
                                        int nend,
-                                       Type h_1,
                                        Type * sa,
                                        Type * sb,
                                        Type * sc,
@@ -193,7 +192,7 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
     {
         if(nstart == 0)
         {
-            srhs[0] = (ab00 * sx[0] + ab01 * sx[1] + ab02 * sx[2]) * h_1;
+            srhs[0] = (ab00 * sx[0] + ab01 * sx[1] + ab02 * sx[2]);
             sa[0] = 0.0;
             sb[0] = 1.0;
             sc[0] = alpha01;
@@ -206,7 +205,6 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
                 srhs[0] += pbci[i] * sx[i];
             });
             srhs[0] += recv[face_idx];
-            srhs[0] *= h_1;
             sa[0] = 0.0;
             sb[0] = 1.0;
             sc[0] = alpha;
@@ -216,7 +214,7 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
     {
         if(nstart == 0)
         {
-            srhs[1] = ab10 * (sx[2] - sx[0]) * h_1;
+            srhs[1] = ab10 * (sx[2] - sx[0]);
             sa[1] = alpha10;
             sb[1] = 1.0;
             sc[1] = alpha10;
@@ -229,7 +227,6 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
                 srhs[1] += pbci[lmd + i] * sx[i];
             });
             srhs[1] += recv[face_size + face_idx];
-            srhs[1] *= h_1;
             sa[1] = alpha;
             sb[1] = 1.0;
             sc[1] = alpha;
@@ -241,7 +238,7 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
         {
             srhs[BlockSize - 1] = -(ab00 * sx[BlockSize - 1] +
                                     ab01 * sx[BlockSize - 2] +
-                                    ab02 * sx[BlockSize - 3]) * h_1;
+                                    ab02 * sx[BlockSize - 3]);
             sa[BlockSize - 1] = alpha01;
             sb[BlockSize - 1] = 1.0;
             sc[BlockSize - 1] = 0.0;
@@ -254,7 +251,7 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
                 srhs[BlockSize - 1] += pbci[i] * sx[BlockSize - 1 - i];
             });
             srhs[BlockSize - 1] += recv[2 * face_size + face_idx];
-            srhs[BlockSize - 1] *= -h_1;
+            srhs[BlockSize - 1] *= -1.0;
             sa[BlockSize - 1] = alpha;
             sb[BlockSize - 1] = 1.0;
             sc[BlockSize - 1] = 0.0;
@@ -264,7 +261,7 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
     {
         if(nend == 0)
         {
-            srhs[BlockSize - 2] = -ab10*(sx[BlockSize - 3] - sx[BlockSize - 1]) * h_1;
+            srhs[BlockSize - 2] = -ab10*(sx[BlockSize - 3] - sx[BlockSize - 1]);
             sa[BlockSize - 2] = alpha10;
             sb[BlockSize - 2] = 1.0;
             sc[BlockSize - 2] = alpha10;
@@ -277,7 +274,7 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
                 srhs[BlockSize - 2] += pbci[lmd + i] * sx[BlockSize - 1 - i];
             });
             srhs[BlockSize - 2] += recv[3 * face_size + face_idx];
-            srhs[BlockSize - 2] *= -h_1;
+            srhs[BlockSize - 2] *= -1;
             sa[BlockSize - 2] = alpha;
             sb[BlockSize - 2] = 1.0;
             sc[BlockSize - 2] = alpha;
@@ -286,9 +283,9 @@ CANARD_DEVICE inline void build_system(unsigned int BlockSize,
     else
     {
         srhs[thread_local_idx] = aa * (sx[thread_local_idx+1] -
-                                       sx[thread_local_idx-1]) * h_1 +
+                                       sx[thread_local_idx-1])+
                                  bb * (sx[thread_local_idx+2]-
-                                       sx[thread_local_idx-2]) * h_1;
+                                       sx[thread_local_idx-2]);
         sa[thread_local_idx] = alpha;
         sb[thread_local_idx] = 1.0;
         sc[thread_local_idx] = alpha;
@@ -301,7 +298,6 @@ CANARD_DEVICE void deriv_kernel_1d_impl(Type *infield,
                                         Type *recv,
                                         Type *pbci,
                                         Type *drva,
-                                        Type h_1,
                                         int nstart,
                                         int nend,
                                         t_dcomp dcomp_info,
@@ -328,7 +324,6 @@ CANARD_DEVICE void deriv_kernel_1d_impl(Type *infield,
     build_system(BlockSize, thread_local_idx,
                  face_idx, face_size,
                  nstart, nend,
-                 h_1,
                  sa, sb, sc, srhs, sx,
                  recv_variable, pbci);
 

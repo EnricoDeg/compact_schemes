@@ -52,10 +52,6 @@ int main()
     dcomp_info.lze = domdcomp_instance.lze + 1;
     dcomp_info.lmx = dcomp_info.lxi * dcomp_info.let * dcomp_info.lze;
 
-    // Spatial distance
-    float h = 1.0;
-    float h_1 = 1.0 / h;
-
     // cm
     float *d_cm0, *d_cm1, *d_cm2;
     cudaMalloc(&d_cm0, 2 * NumberOfSpatialDims * dcomp_info.let * dcomp_info.lze * sizeof(float));
@@ -179,13 +175,13 @@ int main()
             // compute viscous shear stress
             physics_instance.calc_viscous_shear_stress(d_de, d_ss,
                grid_instance.xim, grid_instance.etm, grid_instance.zem,
-               d_yaco, dcomp_info, h_1, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
+               d_yaco, dcomp_info, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
 
             // compute fluxes
             physics_instance.calc_fluxes(d_qa, d_pressure, d_de,
                                          grid_instance.xim, grid_instance.etm, grid_instance.zem,
                                          dcomp_info,
-                                         h_1, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
+                                         domdcomp_instance.mcd, &numerics_instance, &stream[0]);
 
             float dtwi = 1 / dt;
 

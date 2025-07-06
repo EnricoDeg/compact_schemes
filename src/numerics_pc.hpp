@@ -75,7 +75,6 @@ struct numerics_pc : public numerics_base<Type>
     template<unsigned int Axis>
     void deriv1d(Type *infield,
                 Type *outfield,
-                Type h_1,
                 int nstart,
                 int nend,
                 t_dcomp dcomp_info,
@@ -116,14 +115,13 @@ struct numerics_pc : public numerics_base<Type>
             CANARD_KERNEL_NAME(deriv_kernel_1d<Axis>),
             infield, outfield,
             recv_buffer[Axis], pbci,
-            drva_buffer[Axis], h_1, nstart, nend, dcomp_info, variable_id);
+            drva_buffer[Axis], nstart, nend, dcomp_info, variable_id);
     }
 
     // 2D field
     template<unsigned int Axis>
     void deriv2d(Type *infield,
                 Type *outfield,
-                Type h_1,
                 int nstart,
                 int nend,
                 t_dcomp dcomp_info,
@@ -166,7 +164,7 @@ struct numerics_pc : public numerics_base<Type>
             CANARD_KERNEL_NAME(deriv_kernel_2d<Axis>),
             infield, outfield,
             recv_buffer[Axis], pbci,
-            drva_buffer[Axis], h_1, nstart, nend, dcomp_info, variable_id, component_id);
+            drva_buffer[Axis], nstart, nend, dcomp_info, variable_id, component_id);
     }
 
     // 1D infield

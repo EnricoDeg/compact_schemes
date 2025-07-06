@@ -124,7 +124,7 @@ CANARD_GLOBAL void fill_gpu_buffer_kernel(Type *infield,
 template<unsigned int Axis, typename Type>
 CANARD_GLOBAL void deriv_kernel_1d(Type *infield, Type *outfield, Type * recv, Type * pbci,
                                    Type *drva,
-                                   Type h_1, int nstart, int nend, t_dcomp dcomp_info,
+                                   int nstart, int nend, t_dcomp dcomp_info,
                                    unsigned int variable_id)
 {
     // use dynamic shared memory
@@ -159,7 +159,6 @@ CANARD_GLOBAL void deriv_kernel_1d(Type *infield, Type *outfield, Type * recv, T
                                recv,
                                pbci,
                                drva,
-                               h_1,
                                nstart,
                                nend,
                                dcomp_info,
@@ -175,7 +174,7 @@ CANARD_GLOBAL void deriv_kernel_1d(Type *infield, Type *outfield, Type * recv, T
 template<unsigned int Axis, typename Type>
 CANARD_GLOBAL void deriv_kernel_2d(Type *infield, Type * outfield, Type * recv, Type * pbci,
                                    Type *drva,
-                                   Type h_1, int nstart, int nend, t_dcomp dcomp_info,
+                                   int nstart, int nend, t_dcomp dcomp_info,
                                    unsigned int variable_id, unsigned int component_id)
 {
     // use dynamic shared memory
@@ -223,7 +222,6 @@ CANARD_GLOBAL void deriv_kernel_2d(Type *infield, Type * outfield, Type * recv, 
     build_system(BlockSize, thread_local_idx,
                  face_idx, face_size,
                  nstart, nend,
-                 h_1,
                  sa, sb, sc, srhs, sx,
                  recv_variable, pbci);
 
