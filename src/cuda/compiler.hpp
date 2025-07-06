@@ -98,7 +98,7 @@ class rt_compiler
         }
         std::string project_root_path(env_p);
 
-        std::string myText = readFile(std::string("/")+filename, project_root_path);
+        std::string myText = readFile(std::string("/src/")+filename, project_root_path);
         check_cuda_rtc( nvrtcCreateProgram(&prog,
                                            myText.c_str(),
                                            program_name.c_str(),

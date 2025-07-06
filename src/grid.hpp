@@ -32,6 +32,8 @@
 
 #include <cassert>
 
+#include "yaml-cpp/yaml.h"
+
 #include "common/data_types.hpp"
 #include "common/parameters.hpp"
 
@@ -69,12 +71,19 @@ struct grid
         zem = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
     }
 
-    void read_config()
+    void read_config(YAML::Node& grid_yaml)
     {
-        doml0 = 0.5;
-        doml1 = 0.5;
-        domh  = 0.5;
-        span  = 0.1;
+        YAML::Node doml0_node = grid_yaml[0]["doml0"];
+        doml0 = doml0_node.as<float>();
+
+        YAML::Node doml1_node = grid_yaml[1]["doml1"];
+        doml1 = doml1_node.as<float>();
+
+        YAML::Node domh_node = grid_yaml[2]["domh"];
+        domh = domh_node.as<float>();
+
+        YAML::Node span_node = grid_yaml[3]["span"];
+        span = span_node.as<float>();
     }
 
     void generate(const domdcomp& domdcomp_instance)

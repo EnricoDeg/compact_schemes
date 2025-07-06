@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <cuda.h>
 #include <mpi.h>
+#include "yaml-cpp/yaml.h"
 
 #include "common/parameters.hpp"
 #include "domdcomp.hpp"
@@ -24,9 +25,23 @@ int main()
     int world_rank;
     check_mpi(MPI_Comm_rank(MPI_COMM_WORLD, &world_rank));
 
+    // Yaml Configuration
+    const char* env_p;
+    if (!(env_p = getenv("CANARD_ROOT")))
+    {
+        std::cout << "Error: CANARD_ROOT=" << env_p << '\n';
+        exit(EXIT_FAILURE);
+    }
+    std::string project_root_path(env_p);
+
+    YAML::Node config = YAML::LoadFile(project_root_path+std::string("/config.yaml"));
+    YAML::Node driver_yaml = config["driver"];
+    const int nblocks = driver_yaml[0]["nblocks"].as<int>();
+
     // domain decomposition
-    auto domdcomp_instance = domdcomp(0);
-    domdcomp_instance.read_config();
+    YAML::Node domdcomp_yaml = config["domdcomp"];
+    auto domdcomp_instance = domdcomp(nblocks);
+    domdcomp_instance.read_config(domdcomp_yaml);
     domdcomp_instance.go();
     domdcomp_instance.show();
 
@@ -103,8 +118,9 @@ int main()
     }
 
     // generate grid
+    YAML::Node grid_yaml = config["grid"];
     auto grid_instance = grid<float>(domdcomp_instance);
-    grid_instance.read_config();
+    grid_instance.read_config(grid_yaml);
     grid_instance.generate(domdcomp_instance);
 
     auto physics_instance = physics<true, float>(dcomp_info);

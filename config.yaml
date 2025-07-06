@@ -1,0 +1,14 @@
+driver:
+  - nblocks: 0
+domdcomp:
+  - nbpc: [2, 1, 1]
+  - lximb: [2047]
+  - letmb: [63]
+  - lzemb: [63]
+  - nbbc: [10, 10, 10, 10, 10, 10]
+  - mbcd: [-1, -1, -1, -1, -1, -1]
+grid:
+  - doml0: 0.5
+  - doml1: 0.5
+  - domh: 0.5
+  - span: 0.1

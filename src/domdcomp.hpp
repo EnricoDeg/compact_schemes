@@ -32,6 +32,9 @@
 
 #include <iostream>
 #include <cassert>
+
+#include "yaml-cpp/yaml.h"
+
 #include "common/parameters.hpp"
 #include "mpi/check.hpp"
 
@@ -61,20 +64,45 @@ struct domdcomp
     {
     }
 
-    void read_config()
+    void read_config(YAML::Node& domdcomp_yaml)
     {
-        int nprocs;
-        check_mpi( MPI_Comm_size(MPI_COMM_WORLD, &nprocs) );
-        nbpc[0][0] = nprocs;
-        nbpc[1][0] = 1;
-        nbpc[2][0] = 1;
-        lximb[0] = 2047;
-        letmb[0] = 63;
-        lzemb[0] = 63;
-        for(unsigned int i = 0; i < 6*(nblocks+1); ++i)
+        YAML::Node nbpc_node = domdcomp_yaml[0]["nbpc"];
+        for(unsigned int i = 0, k = 0; i < NumberOfSpatialDims; ++i)
         {
-            nbbc[i] =  10;
-            mbcd[i] = -1;
+            for(unsigned int j = 0; j < nblocks+1; ++j, ++k)
+            {
+                nbpc[i][j] = nbpc_node[k].as<int>();
+            }
+        }
+
+        YAML::Node lximb_node = domdcomp_yaml[1]["lximb"];
+        for(unsigned int j = 0; j < nblocks+1; ++j)
+        {
+            lximb[j] = lximb_node[j].as<int>();
+        }
+
+        YAML::Node letmb_node = domdcomp_yaml[2]["letmb"];
+        for(unsigned int j = 0; j < nblocks+1; ++j)
+        {
+            letmb[j] = letmb_node[j].as<int>();
+        }
+
+        YAML::Node lzemb_node = domdcomp_yaml[3]["lzemb"];
+        for(unsigned int j = 0; j < nblocks+1; ++j)
+        {
+            lzemb[j] = lzemb_node[j].as<int>();
+        }
+
+        YAML::Node nbbc_node = domdcomp_yaml[4]["nbbc"];
+        for(unsigned int i = 0; i < 2 * NumberOfSpatialDims * (nblocks+1); ++i)
+        {
+            nbbc[i] = nbbc_node[i].as<int>();
+        }
+
+        YAML::Node mbcd_node = domdcomp_yaml[5]["mbcd"];
+        for(unsigned int i = 0; i < 2 * NumberOfSpatialDims * (nblocks+1); ++i)
+        {
+            mbcd[i] = mbcd_node[i].as<int>();
         }
     }
 
@@ -267,6 +295,10 @@ struct domdcomp
         std::cout << myid << ": lxi       = " << lxi << std::endl;
         std::cout << myid << ": let       = " << let << std::endl;
         std::cout << myid << ": lze       = " << lze << std::endl;
+
+        std::cout << myid << ": nbpc[0][0] = " << nbpc[0][0] << std::endl;
+        std::cout << myid << ": nbpc[1][0] = " << nbpc[1][0] << std::endl;
+        std::cout << myid << ": nbpc[2][0] = " << nbpc[2][0] << std::endl;
 
         std::cout << myid << ": nbc[0][0] = " << nbc[0][0] << std::endl;
         std::cout << myid << ": nbc[0][1] = " << nbc[0][2] << std::endl;
