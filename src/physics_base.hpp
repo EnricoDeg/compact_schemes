@@ -31,9 +31,12 @@
 #define CANARD_PHYSICS_BASE_HPP
 
 #include <cstddef>
+
+#include "yaml-cpp/yaml.h"
+
+
 #include "common/data_types.hpp"
 #include "common/parameters.hpp"
-
 #include "cuda/common.hpp"
 
 template<bool EnableViscous, typename Type>
@@ -129,6 +132,18 @@ struct physics_base
         }
     }
 
+    void read_config(YAML::Node& physics_yaml)
+    {
+        YAML::Node amach1_node = physics_yaml[0]["amach1"];
+        umf.x = amach1_node.as<Type>();
+
+        YAML::Node amach2_node = physics_yaml[1]["amach2"];
+        umf.y = amach2_node.as<float>();
+
+        YAML::Node amach3_node = physics_yaml[2]["amach3"];
+        umf.z = amach3_node.as<float>();
+    }
+
     void movef(Type dtko, Type dtk, Type timo)
     {
 
@@ -142,6 +157,8 @@ struct physics_base
 
     t_stress_tensor<Type> * stress_tensor;
     t_heat_fluxes<Type> * heat_fluxes;
+    t_point<Type> umf;
+    t_point<Type> dudtmf = {.x = 0.0, .y = 0.0, .z = 0.0 };
 };
 
 #endif

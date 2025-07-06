@@ -148,6 +148,7 @@ TEST(test_physics, calc_time_step)
 
     // physics instance init
     auto physics_instance = physics<false, float>(dcomp_info);
+    physics_instance.umf = umf;
 
     // gpu fields
     float * d_xim = allocate_cuda<float>(3 * dcomp_info.lmx);
@@ -171,7 +172,7 @@ TEST(test_physics, calc_time_step)
     float dte = 0.0f;
     physics_instance.calc_time_step(d_xim, d_etm, d_zem,
         d_de, d_yaco, d_ssk,
-        umf, cfl, &dte,
+        cfl, &dte,
         dcomp_info.lmx);
 
     std::cout << world_rank << ": " << res << " (CPU)" << std::endl;

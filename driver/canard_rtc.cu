@@ -71,9 +71,6 @@ int main()
     float * d_pressure;
     cudaMalloc(&d_pressure, dcomp_info.lmx * sizeof(float));
 
-    // umf
-    t_point<float> umf = {.x = 0.3, .y = 0.0, .z = 0.0 };
-
     unsigned int ndf[2][3];
     for(unsigned int i = 0; i < 2; ++i)
         for(unsigned int j = 0; j < 3; ++j)
@@ -95,7 +92,9 @@ int main()
 
     auto numerics_instance = numerics_rtc<float>(dcomp_info);
 
+    YAML::Node physics_yaml = config["physics"];
     auto physics_instance  = physics_rtc<true, float>(dcomp_info, ndf, &numerics_instance);
+    physics_instance.read_config(physics_yaml);
 
     std::vector<std::string> variable_names{"x", "y", "z", "density", "u", "v", "w", "p"};
     auto io_instance = IOwriter(5, domdcomp_instance, variable_names);
@@ -123,7 +122,6 @@ int main()
                                     grid_instance.etm,
                                     grid_instance.zem,
                                     dcomp_info,
-                                    umf,
                                     ndf,
                                     domdcomp_instance.mcd,
                                     &numerics_instance,

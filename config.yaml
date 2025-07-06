@@ -12,3 +12,7 @@ grid:
   - doml1: 0.5
   - domh: 0.5
   - span: 0.1
+physics:
+  - amach1: 0.3e0
+  - amach2: 0.0e0
+  - amach3: 0.0e0

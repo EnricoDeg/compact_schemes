@@ -6,16 +6,6 @@ find_package(MPI REQUIRED)
 
 find_package(CUDA REQUIRED)
 
-include(FetchContent)
-
-FetchContent_Declare(
-  yaml-cpp
-  GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-  GIT_TAG master
-)
-FetchContent_MakeAvailable(yaml-cpp)
-
-
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CUDA_NVCC_FLAGS -std=c++17)

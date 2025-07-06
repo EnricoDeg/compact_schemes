@@ -113,7 +113,7 @@ class rt_compiler
             check_cuda_rtc( nvrtcAddNameExpression(prog, kernel_name_vec[i].c_str()) );
         }
 
-        std::string include_dirs = std::string("-I")+project_root_path;
+        std::string include_dirs = std::string("-I")+project_root_path+std::string("/src");
         // std::string cuda_include_dirs0 = std::string("-I/sw/spack-levante/nvhpc-23.9-xpxqeo/Linux_x86_64/23.9/cuda/12.2/include");
         // std::string cuda_include_dirs1 = std::string("-I/sw/spack-levante/nvhpc-23.9-xpxqeo/Linux_x86_64/23.9/math_libs/12.2/include");
         // std::string cuda_include_dirs2 = std::string("-I/sw/spack-levante/nvhpc-23.9-xpxqeo/Linux_x86_64/23.9/comm_libs/12.2/nccl/include");

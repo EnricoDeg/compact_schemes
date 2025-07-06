@@ -54,6 +54,7 @@ struct physics_rtc : public physics_base<EnableViscous, Type>
     using Base::buffer_ss2;
     using Base::stress_tensor;
     using Base::heat_fluxes;
+    using Base::umf;
     using Base::movef;
 
     physics_rtc(t_dcomp dcomp_info,
@@ -100,7 +101,6 @@ struct physics_rtc : public physics_base<EnableViscous, Type>
                      Type *etm,
                      Type *zem,
                      t_dcomp dcomp_info,
-                     t_point<Type> umf,
                      unsigned int ndf[2][3],
                      int mcd[2][3],
                      numerics_rtc<Type> *numerics_instance,
@@ -116,7 +116,6 @@ struct physics_rtc : public physics_base<EnableViscous, Type>
                                          xim,
                                          etm,
                                          zem,
-                                         umf,
                                          dcomp_info.lmx,
                                          &streams[0]);
 
@@ -196,7 +195,6 @@ struct physics_rtc : public physics_base<EnableViscous, Type>
                                           Type *xim,
                                           Type *etm,
                                           Type *zem,
-                                          t_point<Type> umf,
                                           unsigned int size,
                                           CUstream *stream)
     {

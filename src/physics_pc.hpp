@@ -62,6 +62,7 @@ struct physics : public physics_base<EnableViscous, Type>
     using Base::buffer_ss2;
     using Base::stress_tensor;
     using Base::heat_fluxes;
+    using Base::umf;
     using Base::movef;
 
     physics(t_dcomp dcomp_info) : physics_base<EnableViscous, Type>(dcomp_info)
@@ -83,7 +84,6 @@ struct physics : public physics_base<EnableViscous, Type>
                      Type *de,
                      Type *xim, Type *etm, Type *zem,
                      t_dcomp dcomp_info,
-                     t_point<Type> umf,
                      Type h_1,
                      unsigned int ndf[2][3],
                      int mcd[2][3],
@@ -246,7 +246,6 @@ struct physics : public physics_base<EnableViscous, Type>
                         Type * de,
                         Type * yaco,
                         Type * ssk,
-                        t_point<Type> umf,
                         Type   cfl,
                         Type * dte,
                         unsigned int size)

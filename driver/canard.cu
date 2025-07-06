@@ -89,12 +89,6 @@ int main()
     float *d_ss;
     cudaMalloc(&d_ss, dcomp_info.lmx * sizeof(float));
 
-    // umf
-    t_point<float> umf = {.x = 0.3, .y = 0.0, .z = 0.0 };
-
-    // dudtmf
-    t_point<float> dudtmf = {.x = 0.0, .y = 0.0, .z = 0.0 };
-
     // npex
     int * d_npex;
     cudaMalloc(&d_npex, dcomp_info.lmx * sizeof(int));
@@ -123,7 +117,9 @@ int main()
     grid_instance.read_config(grid_yaml);
     grid_instance.generate(domdcomp_instance);
 
+    YAML::Node physics_yaml = config["physics"];
     auto physics_instance = physics<true, float>(dcomp_info);
+    physics_instance.read_config(physics_yaml);
 
     auto numerics_instance = numerics_pc<float>(dcomp_info);
 
@@ -183,7 +179,6 @@ int main()
                                                     d_de,
                                                     d_yaco,
                                                     d_ss,
-                                                    umf,
                                                     cfl,
                                                     &dte,
                                                     dcomp_info.lmx);
@@ -209,7 +204,7 @@ int main()
             // compute fluxes
             physics_instance.calc_fluxes(d_qa, d_pressure, d_de,
                                          grid_instance.xim, grid_instance.etm, grid_instance.zem,
-                                         dcomp_info, umf,
+                                         dcomp_info,
                                          h_1, ndf, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
 
             float dtwi = 1 / dt;
