@@ -109,6 +109,11 @@ int main()
     // setup derivatives
     numerics_instance.deriv_setup();
 
+    // compute grid metrics (needs numerics instance to be initialized)
+    grid_instance.calc_metrics(dcomp_info,
+                           domdcomp_instance.mcd,
+                           &numerics_instance);
+
     cudaStream_t stream[5];
     for(int i=0; i<5; i++) cudaStreamCreate(&stream[i]);
 

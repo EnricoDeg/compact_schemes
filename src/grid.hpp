@@ -40,8 +40,11 @@
 #include "mpi/check.hpp"
 
 #include "cuda/common.hpp"
+#include "cuda/grid.hpp"
 
 #include "domdcomp.hpp"
+
+#include "numerics_pc.hpp"
 
 int indx3(int i, int j, int k, int nn, int lxi, int let) {
     assert(nn < 3);
@@ -231,6 +234,111 @@ struct grid
         free(patch[0]);
         free(patch[1]);
         free(patch[2]);
+    }
+
+    void calc_metrics(t_dcomp dcomp_info,
+                      int mcd[2][3],
+                      numerics_pc<Type> *numerics_instance)
+    {
+        Type *qok = allocate_cuda<Type>(NumberOfSpatialDims *
+            dcomp_info.lmx);
+        Type *qak = allocate_cuda<Type>(NumberOfSpatialDims *
+            dcomp_info.lmx);
+        Type *dek = allocate_cuda<Type>(NumberOfSpatialDims *
+            dcomp_info.lmx);
+        Type *host_ptr;
+
+        memcpy_cuda_d2h(&host_ptr, &d_patch->x, 1);
+        numerics_instance->mpigo(host_ptr,
+            dcomp_info, mcd, 0);
+
+        numerics_instance->template deriv1d<2>(host_ptr,
+                                               qok + 2 * dcomp_info.lmx,
+                                               numerics_instance->ndf[0][2],
+                                               numerics_instance->ndf[1][2],
+                                               dcomp_info,
+                                               0);
+
+        numerics_instance->template deriv1d<1>(host_ptr,
+                                               qok + 1 * dcomp_info.lmx,
+                                               numerics_instance->ndf[0][1],
+                                               numerics_instance->ndf[1][1],
+                                               dcomp_info,
+                                               0);
+
+        numerics_instance->template deriv1d<0>(host_ptr,
+                                               qok + 0 * dcomp_info.lmx,
+                                               numerics_instance->ndf[0][0],
+                                               numerics_instance->ndf[1][0],
+                                               dcomp_info,
+                                               0);
+
+        memcpy_cuda_d2h(&host_ptr, &d_patch->y, 1);
+        numerics_instance->mpigo(host_ptr,
+            dcomp_info, mcd, 0);
+
+        numerics_instance->template deriv1d<2>(host_ptr,
+                                               qak + 2 * dcomp_info.lmx,
+                                               numerics_instance->ndf[0][2],
+                                               numerics_instance->ndf[1][2],
+                                               dcomp_info,
+                                               0);
+
+        numerics_instance->template deriv1d<1>(host_ptr,
+                                               qak + 1 * dcomp_info.lmx,
+                                               numerics_instance->ndf[0][1],
+                                               numerics_instance->ndf[1][1],
+                                               dcomp_info,
+                                               0);
+
+        numerics_instance->template deriv1d<0>(host_ptr,
+                                               qak + 0 * dcomp_info.lmx,
+                                               numerics_instance->ndf[0][0],
+                                               numerics_instance->ndf[1][0],
+                                               dcomp_info,
+                                               0);
+
+        memcpy_cuda_d2h(&host_ptr, &d_patch->z, 1);
+        numerics_instance->mpigo(host_ptr,
+            dcomp_info, mcd, 0);
+
+        numerics_instance->template deriv1d<2>(host_ptr,
+                                               dek + 2 * dcomp_info.lmx,
+                                               numerics_instance->ndf[0][2],
+                                               numerics_instance->ndf[1][2],
+                                               dcomp_info,
+                                               0);
+
+        numerics_instance->template deriv1d<1>(host_ptr,
+                                               dek + 1 * dcomp_info.lmx,
+                                               numerics_instance->ndf[0][1],
+                                               numerics_instance->ndf[1][1],
+                                               dcomp_info,
+                                               0);
+
+        numerics_instance->template deriv1d<0>(host_ptr,
+                                               dek + 0 * dcomp_info.lmx,
+                                               numerics_instance->ndf[0][0],
+                                               numerics_instance->ndf[1][0],
+                                               dcomp_info,
+                                               0);
+
+        grid_metrics_fill(xim, etm, zem, qok, qak, dek, dcomp_info.lmx);
+
+        // TODO: apply filter
+
+        grid_metrics_yaco_fill(yaco,
+                               xim,
+                               etm,
+                               zem,
+                               qok,
+                               qak,
+                               dek,
+                               dcomp_info.lmx);
+
+        free_cuda(qok);
+        free_cuda(qak);
+        free_cuda(dek);
     }
 
     ~grid()

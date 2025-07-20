@@ -173,6 +173,8 @@ struct numerics_pc : public numerics_base<Type>
                int mcd[2][3],
                int itag)
     {
+        cudaStream_t stream;
+        cudaStreamCreate(&stream);
         // Get the rank of the process
         auto exchange_instance = exchange<Type>();
 
@@ -215,7 +217,7 @@ struct numerics_pc : public numerics_base<Type>
                 const int pointer_offset = ip * mpi_size;
                 if(ndf[ip][nn] == 1)
                 {
-                    buffer_instance.fill(istart, increment, buffer_offset);
+                    buffer_instance.fill(istart, increment, buffer_offset, &stream);
                     exchange_instance.trigger(mpi_size,
                                               pointer_offset,
                                               mcd[ip][nn],
@@ -226,6 +228,7 @@ struct numerics_pc : public numerics_base<Type>
         });
 
         exchange_instance.reset();
+        cudaStreamDestroy(stream);
     }
 
     // 2D infield
