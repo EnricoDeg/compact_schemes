@@ -80,4 +80,26 @@ CANARD_GLOBAL void init_runge_kutta_kernel(Type *de,
     }
 }
 
+template<typename Type>
+CANARD_GLOBAL
+void update_conservative_variables_kernel(Type *qa,
+                                          Type *qo,
+                                          Type *de,
+                                          Type *yaco,
+                                          Type dtk,
+                                          unsigned int size)
+{
+    unsigned int thread_id = get_thread_global_idx();
+
+    if(thread_id < size)
+    {
+        Type rr = dtk * yaco[thread_id];
+        for(unsigned int i = 0; i < NumberOfVariables; ++i)
+        {
+            qa[thread_id + i * size] = qo[thread_id + i * size] -
+                rr * de[thread_id + i * size];
+        }
+    }
+}
+
 #endif

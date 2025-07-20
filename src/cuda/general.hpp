@@ -73,4 +73,22 @@ void init_runge_kutta(Type *de,
         de, qa, pressure, ss, srefp1dre, srefoo, size);
 }
 
+template<typename Type>
+void update_conservative_variables(Type *qa,
+                                   Type *qo,
+                                   Type *de,
+                                   Type *yaco,
+                                   Type dtk,
+                                   unsigned int size)
+{
+    unsigned int blockSize = 256;
+    unsigned int blockPerGrid = div_ceil(size, blockSize);
+    dim3 threadsPerBlock(blockSize, 1);
+    dim3 blocksPerGrid(blockPerGrid);
+
+    TIME(blocksPerGrid, threadsPerBlock, 0, 0, false,
+        CANARD_KERNEL_NAME(update_conservative_variables_kernel),
+        qa, qo, de, yaco, dtk, size);
+}
+
 #endif

@@ -37,9 +37,9 @@ int main()
 
     YAML::Node config = YAML::LoadFile(project_root_path+std::string("/config.yaml"));
     YAML::Node driver_yaml = config["driver"];
-    const int nblocks = driver_yaml[0]["nblocks"].as<int>();
-    const int nts = driver_yaml[1]["nts"].as<int>();
-    bool output_enabled = driver_yaml[2]["output_enabled"].as<bool>();
+    const int nblocks      = driver_yaml[0]["nblocks"].as<int>();
+    const int nts          = driver_yaml[1]["nts"].as<int>();
+    bool output_enabled    = driver_yaml[2]["output_enabled"].as<bool>();
 
     // domain decomposition
     YAML::Node domdcomp_yaml = config["domdcomp"];
@@ -82,10 +82,6 @@ int main()
     float * d_pressure;
     cudaMalloc(&d_pressure, dcomp_info.lmx * sizeof(float));
 
-    // yaco
-    float *d_yaco;
-    cudaMalloc(&d_yaco, dcomp_info.lmx * sizeof(float));
-
     // ss
     float *d_ss;
     cudaMalloc(&d_ss, dcomp_info.lmx * sizeof(float));
@@ -106,9 +102,9 @@ int main()
 
     auto numerics_instance = numerics_pc<float>(dcomp_info, domdcomp_instance.nbc);
 
-    std::vector<std::string> variable_names{"x", "y", "z", "density", "u", "v", "w", "p"};
+    std::vector<std::string> variable_names{"x", "y", "z",
+        "density", "u", "v", "w", "p"};
     auto io_instance = IOwriter(5, domdcomp_instance, variable_names);
-    // io_instance.go(domdcomp_instance, grid_instance, data);
 
     // setup derivatives
     numerics_instance.deriv_setup();
@@ -179,7 +175,7 @@ int main()
                                                     grid_instance.etm,
                                                     grid_instance.zem,
                                                     d_de,
-                                                    d_yaco,
+                                                    grid_instance.yaco,
                                                     d_ss,
                                                     cfl,
                                                     &dte,
@@ -199,22 +195,35 @@ int main()
             }
 
             // compute viscous shear stress
-            physics_instance.calc_viscous_shear_stress(d_de, d_ss,
-               grid_instance.xim, grid_instance.etm, grid_instance.zem,
-               d_yaco, dcomp_info, domdcomp_instance.mcd, &numerics_instance, &stream[0]);
+            physics_instance.calc_viscous_shear_stress(d_de,
+                                                       d_ss,
+                                                       grid_instance.xim,
+                                                       grid_instance.etm,
+                                                       grid_instance.zem,
+                                                       grid_instance.yaco,
+                                                       dcomp_info,
+                                                       domdcomp_instance.mcd,
+                                                       &numerics_instance,
+                                                       &stream[0]);
 
             // compute fluxes
-            physics_instance.calc_fluxes(d_qa, d_pressure, d_de,
-                                         grid_instance.xim, grid_instance.etm, grid_instance.zem,
+            physics_instance.calc_fluxes(d_qa,
+                                         d_pressure,
+                                         d_de,
+                                         grid_instance.xim,
+                                         grid_instance.etm,
+                                         grid_instance.zem,
                                          dcomp_info,
-                                         domdcomp_instance.mcd, &numerics_instance, &stream[0]);
+                                         domdcomp_instance.mcd,
+                                         &numerics_instance,
+                                         &stream[0]);
 
-            float dtwi = 1 / dt;
+            // float dtwi = 1 / dt;
 
             // GCBC
             // auto gcbc_instance = gcbc<float, int>(dcomp_info);
             // gcbc_go(numerics_instance.drva_buffer, d_cm, gcbc_instance.drvb,
-            //         d_qa, d_de, d_pressure, d_yaco, gcbc_instance.sbcc,
+            //         d_qa, d_de, d_pressure, grid_instance.yaco, gcbc_instance.sbcc,
             //         umf, dudtmf, dcomp_info, dtwi,
             //         domdcomp_instance.nbc, mcd);
 
@@ -224,6 +233,14 @@ int main()
             dtko = dt * min(nk-1, 1) / (nkrk - nk + 2);
             dtk  = dt / (nkrk - nk + 1);
             physics_instance.movef(dtko, dtk, timo);
+
+            // updating conservative variables
+            update_conservative_variables(d_qa,
+                                          d_qo,
+                                          d_de,
+                                          grid_instance.yaco,
+                                          dtk,
+                                          dcomp_info.lmx);
 
             // wall temperature / velocity condition
 

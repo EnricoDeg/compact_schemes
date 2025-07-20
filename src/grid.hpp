@@ -66,9 +66,10 @@ struct grid
     {
         size_t nelements = domdcomp_instance.lmx;
 
-        xim = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
-        etm = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
-        zem = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
+        xim  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
+        etm  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
+        zem  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
+        yaco = allocate_cuda<Type>(nelements);
     }
 
     void read_config(YAML::Node& grid_yaml)
@@ -237,6 +238,7 @@ struct grid
         free_cuda(xim);
         free_cuda(etm);
         free_cuda(zem);
+        free_cuda(yaco);
         if(patch_generated)
         {
             Type *tmp;
@@ -258,6 +260,7 @@ struct grid
     Type *xim;
     Type *etm;
     Type *zem;
+    Type *yaco;
     bool patch_generated = false;
 };
 
