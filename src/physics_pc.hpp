@@ -46,6 +46,7 @@
 #include "numerics_pc.hpp"
 
 #include "physics_base.hpp"
+#include "grid.hpp"
 
 auto sync_function = [] (cudaStream_t *stream) {
     check_cuda( cudaStreamSynchronize(*stream) );
@@ -75,9 +76,14 @@ struct physics : public physics_base<EnableViscous, Type>
 
     }
 
-    void init()
+    void init(Type *qa,
+              unsigned int lmx,
+              grid<Type> *grid_instance)
     {
+        std::string function_name  = "init";
+        NVTX_RANGE(function_name.c_str());
 
+        init_physics(qa, grid_instance->d_patch, lmx);
     }
 
     void calc_fluxes(Type *qa, Type *pressure,

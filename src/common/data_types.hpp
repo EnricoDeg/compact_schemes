@@ -66,4 +66,12 @@ struct t_heat_fluxes
     Type * zz;
 };
 
+template<typename Type>
+struct t_patch
+{
+    Type * x;
+    Type * y;
+    Type * z;
+};
+
 #endif

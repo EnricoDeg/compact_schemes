@@ -39,6 +39,37 @@
 #include "cuda/kernels/reductionShMem.hpp"
 #include "cuda/kernels/functional.hpp"
 
+template<typename Type>
+CANARD_GLOBAL void init_physics_kernel(Type *qa,
+                                       t_patch<Type> *patch,
+                                       unsigned int size)
+{
+    unsigned int thread_id = get_thread_global_idx();
+
+    if(thread_id < size)
+    {
+        Type radv = 1.0;
+        Type k1 = 12.5;
+        Type k2 = 1.0;
+        Type vee[NumberOfSpatialDims];
+
+        Type ao       = k2 / 2.0 / pi * std::sqrt( std::exp( 1.0 - k1 * k1 * 
+            (patch->x[thread_id] * patch->x[thread_id] +
+             patch->y[thread_id] * patch->y[thread_id]) / (radv * radv)));
+        Type bo       = std::pow(( 1.0 - 0.5 * gamm1 * ao * ao ), hamm1);
+        vee[0]        =  k1 * patch->y[thread_id] * ao / radv;
+        vee[1]        = -k1 * patch->x[thread_id] * ao / radv;
+        vee[2]        = 0.0;
+        Type hv2      = 0.5 * ( vee[0] * vee[0] + vee[1] * vee[1] + vee[2] * vee[2] );
+
+        qa[thread_id           ] = bo;
+        qa[thread_id + 1 * size] = bo * vee[0];
+        qa[thread_id + 2 * size] = bo * vee[1];
+        qa[thread_id + 3 * size] = bo * vee[2];
+        qa[thread_id + 4 * size] = hamhamm1 * std::pow(bo, gam) + hv2 * bo;
+    }
+}
+
 template<bool EnableViscous, typename Type>
 CANARD_GLOBAL void calc_fluxes_pre_compute_kernel(Type *buffer,
                                                   Type *qa,

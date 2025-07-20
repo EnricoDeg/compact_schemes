@@ -37,6 +37,7 @@ int main()
     YAML::Node config = YAML::LoadFile(project_root_path+std::string("/config.yaml"));
     YAML::Node driver_yaml = config["driver"];
     const int nblocks = driver_yaml[0]["nblocks"].as<int>();
+    const int nts = driver_yaml[1]["nts"].as<int>();
 
     // domain decomposition
     YAML::Node domdcomp_yaml = config["domdcomp"];
@@ -53,23 +54,23 @@ int main()
     dcomp_info.lmx = dcomp_info.lxi * dcomp_info.let * dcomp_info.lze;
 
     // cm
-    float *d_cm0, *d_cm1, *d_cm2;
-    cudaMalloc(&d_cm0, 2 * NumberOfSpatialDims * dcomp_info.let * dcomp_info.lze * sizeof(float));
-    cudaMalloc(&d_cm1, 2 * NumberOfSpatialDims * dcomp_info.lxi * dcomp_info.lze * sizeof(float));
-    cudaMalloc(&d_cm2, 2 * NumberOfSpatialDims * dcomp_info.lxi * dcomp_info.let * sizeof(float));
+    // float *d_cm0, *d_cm1, *d_cm2;
+    // cudaMalloc(&d_cm0, 2 * NumberOfSpatialDims * dcomp_info.let * dcomp_info.lze * sizeof(float));
+    // cudaMalloc(&d_cm1, 2 * NumberOfSpatialDims * dcomp_info.lxi * dcomp_info.lze * sizeof(float));
+    // cudaMalloc(&d_cm2, 2 * NumberOfSpatialDims * dcomp_info.lxi * dcomp_info.let * sizeof(float));
 
-    float *d_cm[3];
-    d_cm[0] = d_cm0;
-    d_cm[1] = d_cm1;
-    d_cm[2] = d_cm2;
+    // float *d_cm[3];
+    // d_cm[0] = d_cm0;
+    // d_cm[1] = d_cm1;
+    // d_cm[2] = d_cm2;
 
     // qa
     float * d_qa;
-    cudaMalloc(&d_qa, NumberOfSpatialDims * dcomp_info.lmx * sizeof(float));
+    cudaMalloc(&d_qa, NumberOfVariables * dcomp_info.lmx * sizeof(float));
 
     // de
     float * d_de;
-    cudaMalloc(&d_de, NumberOfSpatialDims * dcomp_info.lmx * sizeof(float));
+    cudaMalloc(&d_de, NumberOfVariables * dcomp_info.lmx * sizeof(float));
 
     // pressure
     float * d_pressure;
@@ -84,8 +85,8 @@ int main()
     cudaMalloc(&d_ss, dcomp_info.lmx * sizeof(float));
 
     // npex
-    int * d_npex;
-    cudaMalloc(&d_npex, dcomp_info.lmx * sizeof(int));
+    // int * d_npex;
+    // cudaMalloc(&d_npex, dcomp_info.lmx * sizeof(int));
 
     // generate grid
     YAML::Node grid_yaml = config["grid"];
@@ -109,12 +110,23 @@ int main()
     cudaStream_t stream[5];
     for(int i=0; i<5; i++) cudaStreamCreate(&stream[i]);
 
-    size_t n = 0;
-    size_t ndt = 0;
-    float dt = 0.1f;
-    float dts = 0.0f;
-    float dte = 0.0f;
-    float timo = 0.0f;
+    size_t n, ndt;
+    float dt, dts, dte, timo;
+    if(nts == 0)
+    {
+        n = 0;
+        ndt = 0;
+        dt = 0.1f;
+        dts = 0.0f;
+        dte = 0.0f;
+        timo = 0.0f;
+        physics_instance.init(d_qa, dcomp_info.lmx, &grid_instance);
+    }
+    else
+    {
+        // read restart file
+    }
+
     float dtsum = 0.0f;
     float tmax = 1.0;
     float cfl = 0.95f;
@@ -124,8 +136,6 @@ int main()
     float dtk, dtko;
     int ndata = 2;
     bool output_enabled = false;
-
-    physics_instance.init();
 
     check_mpi(MPI_Barrier(MPI_COMM_WORLD));
 

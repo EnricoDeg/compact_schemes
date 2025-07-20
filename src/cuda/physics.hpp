@@ -30,13 +30,29 @@
 #ifndef CANARD_CUDA_PHYSICS_HPP
 #define CANARD_CUDA_PHYSICS_HPP
 
-#include "common.hpp"
+#include "common/parameters.hpp"
 #include "common/utils.hpp"
 
+#include "cuda/common.hpp"
 #include "cuda/kernels/physics.hpp"
 #include "cuda/check.hpp"
 #include "cuda/dispatch.hpp"
 #include "cuda/common.hpp"
+
+template<typename Type>
+void init_physics(Type *qa,
+                  t_patch<Type> *patch,
+                  unsigned int size)
+{
+    unsigned int blockSize = 256;
+    unsigned int blockPerGrid = div_ceil(size, blockSize);
+    dim3 threadsPerBlock(blockSize, 1);
+    dim3 blocksPerGrid(blockPerGrid);
+
+    TIME(blocksPerGrid, threadsPerBlock, 0, 0, false,
+        CANARD_KERNEL_NAME(init_physics_kernel),
+        qa, patch, size);
+}
 
 template<bool EnableViscous, typename Type>
 void calc_fluxes_pre_compute(Type *buffer,

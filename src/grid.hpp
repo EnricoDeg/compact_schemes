@@ -88,6 +88,8 @@ struct grid
 
     void generate(const domdcomp& domdcomp_instance)
     {
+        patch_generated = true;
+        Type *patch[NumberOfSpatialDims];
         patch[0] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
         patch[1] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
         patch[2] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
@@ -210,6 +212,24 @@ struct grid
                             myid, MPI_COMM_WORLD,
                             MPI_STATUS_IGNORE) );
         }
+        d_patch = allocate_cuda<t_patch<Type>>(1);
+        Type *tmp;
+
+        tmp = allocate_cuda<Type>(domdcomp_instance.lmx+1);
+        memcpy_cuda_h2d(tmp, patch[0], domdcomp_instance.lmx+1);
+        memcpy_cuda_h2d(&d_patch->x, &tmp, 1);
+
+        tmp =  allocate_cuda<Type>(domdcomp_instance.lmx+1);
+        memcpy_cuda_h2d(&d_patch->y, &tmp, 1);
+        memcpy_cuda_h2d(tmp, patch[1], domdcomp_instance.lmx+1);
+
+        tmp =  allocate_cuda<Type>(domdcomp_instance.lmx+1);
+        memcpy_cuda_h2d(&d_patch->z, &tmp, 1);
+        memcpy_cuda_h2d(tmp, patch[2], domdcomp_instance.lmx+1);
+
+        free(patch[0]);
+        free(patch[1]);
+        free(patch[2]);
     }
 
     ~grid()
@@ -217,16 +237,28 @@ struct grid
         free_cuda(xim);
         free_cuda(etm);
         free_cuda(zem);
+        if(patch_generated)
+        {
+            Type *tmp;
+            memcpy_cuda_d2h(&tmp, &d_patch->x, 1);
+            free_cuda(tmp);
+            memcpy_cuda_d2h(&tmp, &d_patch->y, 1);
+            free_cuda(tmp);
+            memcpy_cuda_d2h(&tmp, &d_patch->z, 1);
+            free_cuda(tmp);
+            free_cuda(d_patch);
+        }
     }
 
     Type span;
     Type doml0;
     Type doml1;
     Type domh;
-    Type *patch[NumberOfSpatialDims];
+    t_patch<Type> *d_patch;
     Type *xim;
     Type *etm;
     Type *zem;
+    bool patch_generated = false;
 };
 
 #endif
