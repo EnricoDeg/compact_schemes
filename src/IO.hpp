@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "common/parameters.hpp"
+#include "cuda/IO.hpp"
 #include "mpi/check.hpp"
 
 #include "domdcomp.hpp"
@@ -44,9 +45,16 @@
 
 struct IOwriter
 {
-    IOwriter(int nvars_, const domdcomp& domdcomp_instance, std::vector<std::string>& variable_names_)
+    IOwriter(int nvars_,
+             const domdcomp& domdcomp_instance,
+             std::vector<std::string>& variable_names_)
         : nvars(nvars_)
     {
+        dtsum  = 0.0;
+        size   = domdcomp_instance.lmx + 1;
+        qb     = allocate_cuda<float>(nvars * size);
+        d_vart = allocate_cuda<float>((nvars + NumberOfSpatialDims) * size);
+        vart   = (float *)malloc((nvars + NumberOfSpatialDims) * size * sizeof(float));
         for(unsigned int i = 0; i < variable_names_.size(); ++i)
         {
             variable_names.push_back(variable_names_[i]);
@@ -93,7 +101,37 @@ struct IOwriter
     }
     ~IOwriter()
     {
+        free(lpos);
+        free(vart);
+        free_cuda(qb);
+        free_cuda(d_vart);
+    }
 
+    void fill_buffer(float *qo,
+                     float *qa,
+                     t_patch<float> *patch,
+                     const float& dt,
+                     t_point<float> umf,
+                     bool is_output_step)
+    {
+        dtsum += dt;
+        float fctr = 0.5 * dt;
+        fill_IO_buffer(d_vart,
+                       qb,
+                       qo,
+                       qa,
+                       patch,
+                       fctr,
+                       dtsum,
+                       umf,
+                       is_output_step,
+                       size,
+                       file_number);
+    }
+
+    void reset_buffer()
+    {
+        reset_IO_buffer(qb, size);
     }
 
     void SwapEnd(float& var)
@@ -106,7 +144,7 @@ struct IOwriter
     }
 
     void go_vtk(const domdcomp& domdcomp_instance,
-           float *data)
+                float *data)
     {
         std::ofstream vtkstream;
         std::string filename = "output_data" + std::to_string(file_number) + ".vtk";
@@ -138,7 +176,8 @@ struct IOwriter
 
             // data
             vtkstream << "POINT_DATA " << block_points << std::endl;
-            for(unsigned int var = NumberOfSpatialDims; var < nvars; ++var)
+            int nvars_total = nvars + NumberOfSpatialDims;
+            for(unsigned int var = NumberOfSpatialDims; var < nvars_total; ++var)
             {
                 vtkstream << "SCALARS " << variable_names[var] << " float 1\n";
                 vtkstream << "LOOKUP_TABLE default\n";
@@ -159,8 +198,16 @@ struct IOwriter
     }
 
     void go(const domdcomp& domdcomp_instance,
-            const grid<float>& grid_instance, float *vart)
+            const grid<float>& grid_instance,
+            bool is_output_step)
     {
+        if(!is_output_step)
+        {
+            return;
+        }
+        int nvars_total = nvars + NumberOfSpatialDims;
+        memcpy_cuda_d2h(vart, d_vart, nvars_total * size);
+
         int myid;
         check_mpi( MPI_Comm_rank(MPI_COMM_WORLD, &myid) );
 
@@ -168,12 +215,12 @@ struct IOwriter
                     (domdcomp_instance.leto + 1) *
                     (domdcomp_instance.lzeo + 1);
 
-        int llmb = nvars * ltomb - 1;
+        int llmb = nvars_total * ltomb - 1;
         float *vara = (float *)malloc((llmb + 1) * sizeof(float));
         float *varb = (float *)malloc((llmb + 1) * sizeof(float));
         int lje = -1;
         int ljs = lje + 1;
-        lje = ljs + nvars * (domdcomp_instance.lmx + 1) - 1;
+        lje = ljs + nvars_total * (domdcomp_instance.lmx + 1) - 1;
         if ( myid == domdcomp_instance.mo[domdcomp_instance.mb] )
         {
             int mps = domdcomp_instance.mo[domdcomp_instance.mb];
@@ -181,7 +228,7 @@ struct IOwriter
                         domdcomp_instance.nbpc[1][domdcomp_instance.mb] *
                         domdcomp_instance.nbpc[2][domdcomp_instance.mb] - 1;
             int lis = 0;
-            int lie = nvars * ( domdcomp_instance.lmx + 1 ) - 1;
+            int lie = nvars_total * ( domdcomp_instance.lmx + 1 ) - 1;
             for(unsigned int i = 0; i <= lie-lis; ++i)
             {
                 vara[lis + i] = vart[ljs + i];
@@ -190,9 +237,9 @@ struct IOwriter
             for(unsigned int mp = mps + 1; mp <= mpe; ++mp)
             {
                 lis = lie + 1;
-                lie = lis + nvars * ( domdcomp_instance.lxim[mp] + 1 ) *
-                                    ( domdcomp_instance.letm[mp] + 1 ) *
-                                    ( domdcomp_instance.lzem[mp] + 1 ) - 1;
+                lie = lis + nvars_total * ( domdcomp_instance.lxim[mp] + 1 ) *
+                                          ( domdcomp_instance.letm[mp] + 1 ) *
+                                          ( domdcomp_instance.lzem[mp] + 1 ) - 1;
                 int lmpi = lie - lis + 1;
                 int itag = 1;
                 check_mpi(MPI_Recv(vara + lis, lmpi, MPI_FLOAT,
@@ -201,7 +248,7 @@ struct IOwriter
             lis = 0;
             for(unsigned int mp = mps; mp <= mpe; ++mp)
             {
-                for(unsigned int m = 0; m < nvars; ++m)
+                for(unsigned int m = 0; m < nvars_total; ++m)
                 {
                     for(unsigned int k = 0; k <= domdcomp_instance.lzem[mp]; ++k)
                     {
@@ -235,11 +282,18 @@ struct IOwriter
                 domdcomp_instance.mo[domdcomp_instance.mb], itag, MPI_COMM_WORLD));
             free(vara);
         }
+        dtsum = 0.0;
         free(varb);
+        reset_buffer();
     }
     int nvars;
+    unsigned int size;
     int *lpos;
     int file_number = 0;
+    float dtsum = 0.0;
+    float *qb;
+    float *d_vart;
+    float *vart;
     std::vector<std::string> variable_names;
 };
 

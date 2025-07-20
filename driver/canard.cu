@@ -4,6 +4,7 @@
 #include "yaml-cpp/yaml.h"
 
 #include "common/parameters.hpp"
+#include "cuda/general.hpp"
 #include "domdcomp.hpp"
 #include "IO.hpp"
 #include "numerics_pc.hpp"
@@ -38,6 +39,7 @@ int main()
     YAML::Node driver_yaml = config["driver"];
     const int nblocks = driver_yaml[0]["nblocks"].as<int>();
     const int nts = driver_yaml[1]["nts"].as<int>();
+    bool output_enabled = driver_yaml[2]["output_enabled"].as<bool>();
 
     // domain decomposition
     YAML::Node domdcomp_yaml = config["domdcomp"];
@@ -67,6 +69,10 @@ int main()
     // qa
     float * d_qa;
     cudaMalloc(&d_qa, NumberOfVariables * dcomp_info.lmx * sizeof(float));
+
+    // qo
+    float * d_qo;
+    cudaMalloc(&d_qo, NumberOfVariables * dcomp_info.lmx * sizeof(float));
 
     // de
     float * d_de;
@@ -127,20 +133,24 @@ int main()
         // read restart file
     }
 
-    float dtsum = 0.0f;
     float tmax = 1.0;
     float cfl = 0.95f;
-    int nout;
+    bool nout;
     float res;
     int ndati = -1;
     float dtk, dtko;
     int ndata = 2;
-    bool output_enabled = false;
 
     check_mpi(MPI_Barrier(MPI_COMM_WORLD));
 
     do{
-        std::cout << "Time step = " << n << std::endl;
+        if(world_rank == 0)
+        {
+            std::cout << "Time step = " << n << std::endl;
+        }
+
+        init_main_loop(d_qa, d_qo, dcomp_info.lmx);
+
         for(int nk = 0; nk < nkrk; ++nk)
         {
 
@@ -150,7 +160,13 @@ int main()
             physics_instance.movef(dtko, dtk, timo);
 
             // temporary storage of primitive variables and pressure
-
+            init_runge_kutta(d_de,
+                             d_qa,
+                             d_pressure,
+                             d_ss,
+                             physics_instance.srefp1dre,
+                             physics_instance.srefoo,
+                             dcomp_info.lmx);
 
             // compute time step size and output time
             if(nk == 1)
@@ -173,11 +189,11 @@ int main()
                 //     std::sin(0.05f * pi * (n - ndt)) *
                 //     std::sin(0.05f * pi * (n - ndt));
 
-                nout = 0;
+                nout = false;
                 res = (ndati + 1) * tmax / ndata;
                 if((timo - res) * (timo + dt - res) <= 0.0f)
                 {
-                    nout = 1;
+                    nout = true;
                     ndati++;
                 }
             }
@@ -219,17 +235,15 @@ int main()
         timo += dt;
 
         // record intermediate results
-        // if(output_enabled)
-        // {
-        //     if(timo > (-tmax) / ndata)
-        //     {
-        //         dtsum += dt;
-        //         if(nout == 1)
-        //         {
-
-        //         }
-        //     }
-        // }
+        if(output_enabled)
+        {
+            if(timo > (-tmax) / ndata)
+            {
+                io_instance.fill_buffer(d_qo,
+                    d_qa, grid_instance.d_patch, dt, physics_instance.umf, nout);
+                io_instance.go(domdcomp_instance, grid_instance, nout);
+            }
+        }
 
     } while(timo < tmax && (dt != 0.0f || n <= 2));
 
