@@ -142,11 +142,64 @@ struct physics_base
 
         YAML::Node amach3_node = physics_yaml[2]["amach3"];
         umf.z = amach3_node.as<float>();
+
+        amachoo = std::sqrt(umf.x * umf.x +
+                            umf.y * umf.y +
+                            umf.z * umf.z);
+
+        YAML::Node reoo_node = physics_yaml[3]["reoo"];
+        if ( amachoo > sml )
+        {
+            reoo = reoo_node.as<float>() / amachoo;
+        }
+        else
+        {
+            reoo = reoo_node.as<float>();
+        }
+
+        YAML::Node tempoo_node = physics_yaml[4]["tempoo"];
+        tempoo = tempoo_node.as<float>();
+
+        srefoo = 111.0 / tempoo;
+        srefp1dre = (srefoo + 1.0) / reoo;
+        sqrtrema  = std::sqrt(reoo * amachoo);
+        sqrtremai = 1.0 / std::max( sqrtrema, sml );
+        uoo.x = umf.x;
+        uoo.y = umf.y;
+        uoo.z = umf.z;
+
+        YAML::Node timf_node = physics_yaml[5]["timf"];
+        timf = timf_node.as<float>();
+        YAML::Node nsmf_node = physics_yaml[6]["nsmf"];
+        nsmf = nsmf_node.as<bool>();
     }
 
     void movef(Type dtko, Type dtk, Type timo)
     {
+        if ( nsmf )
+        {
+            Type ra0  = pi / timf;
+            Type ra1  = ra0 * std::min(timo, timf);
+            Type ra2  = ra0 * std::min(timo + dtko, timf);
+            Type fctr = 1.0 - std::cos(ra1);
+            Type dfdt = ra0 * std::sin(ra2);
+            Type progmf = 0.5 * (fctr + dtk * dfdt);
+            umf.x = progmf * uoo.x;
+            umf.y = progmf * uoo.y;
+            umf.z = progmf * uoo.z;
 
+            fctr   = std::sin(ra1);
+            dfdt   = ra0 * std::cos(ra2);
+            progmf = 0.5 * ra0 * (fctr + dtk * dfdt);
+            dudtmf.x = progmf * uoo.x;
+            dudtmf.y = progmf * uoo.y;
+            dudtmf.z = progmf * uoo.z;
+        }
+        else
+        {
+            umf = uoo;
+            dudtmf = {.x = 0.0, .y = 0.0, .z = 0.0};
+        }
     }
 
     Type * buffer;
@@ -159,6 +212,17 @@ struct physics_base
     t_heat_fluxes<Type> * heat_fluxes;
     t_point<Type> umf;
     t_point<Type> dudtmf = {.x = 0.0, .y = 0.0, .z = 0.0 };
+
+    Type reoo;
+    Type tempoo;
+    Type amachoo;
+    Type srefoo;
+    Type srefp1dre;
+    Type sqrtrema;
+    Type sqrtremai;
+    Type timf;
+    bool nsmf;
+    t_point<Type> uoo;
 };
 
 #endif

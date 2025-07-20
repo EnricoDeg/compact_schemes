@@ -73,4 +73,6 @@ static constexpr int nrall = 0;
 // Runge Kutta
 static constexpr int nkrk = 4;
 
+static constexpr float sml = 1.0e-8;
+
 #endif

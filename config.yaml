@@ -1,6 +1,7 @@
 driver:
   - nblocks: 0
   - nts: 0
+  - output_enabled: true
 domdcomp:
   - nbpc: [2, 1, 1]
   - lximb: [2047]
@@ -14,6 +15,10 @@ grid:
   - domh: 0.5
   - span: 0.1
 physics:
-  - amach1: 0.3e0
-  - amach2: 0.0e0
-  - amach3: 0.0e0
+  - amach1: 0.3
+  - amach2: 0.0
+  - amach3: 0.0
+  - reoo: 500000.0
+  - tempoo: 300.0
+  - timf: 0.0
+  - nsmf: false
