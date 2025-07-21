@@ -73,6 +73,10 @@ struct grid
         etm  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
         zem  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
         yaco = allocate_cuda<Type>(nelements);
+        patch[0] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
+        patch[1] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
+        patch[2] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
+
     }
 
     void read_config(YAML::Node& grid_yaml)
@@ -93,11 +97,6 @@ struct grid
     void generate(const domdcomp& domdcomp_instance)
     {
         patch_generated = true;
-        Type *patch[NumberOfSpatialDims];
-        patch[0] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
-        patch[1] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
-        patch[2] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
-
         int myid;
         check_mpi( MPI_Comm_rank(MPI_COMM_WORLD, &myid) );
         // master process in block generate full block grid and then send the partition
@@ -230,10 +229,6 @@ struct grid
         tmp =  allocate_cuda<Type>(domdcomp_instance.lmx+1);
         memcpy_cuda_h2d(&d_patch->z, &tmp, 1);
         memcpy_cuda_h2d(tmp, patch[2], domdcomp_instance.lmx+1);
-
-        free(patch[0]);
-        free(patch[1]);
-        free(patch[2]);
     }
 
     void calc_metrics(t_dcomp dcomp_info,
@@ -358,6 +353,9 @@ struct grid
             free_cuda(tmp);
             free_cuda(d_patch);
         }
+        free(patch[0]);
+        free(patch[1]);
+        free(patch[2]);
     }
 
     Type span;
@@ -370,6 +368,7 @@ struct grid
     Type *zem;
     Type *yaco;
     bool patch_generated = false;
+    Type *patch[NumberOfSpatialDims];
 };
 
 #endif

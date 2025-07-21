@@ -43,6 +43,17 @@
 #include "domdcomp.hpp"
 #include "grid.hpp"
 
+float SwapEnd2(float& var)
+{
+    float tmp = var;
+    char* varArray = reinterpret_cast<char*>(&tmp);
+    for(long i = 0; i < static_cast<long>(sizeof(var)/2); i++)
+    {
+        std::swap(varArray[sizeof(var) - 1 - i], varArray[i]);
+    }
+    return tmp;
+}
+
 struct IOwriter
 {
     IOwriter(int nvars_,
@@ -107,6 +118,15 @@ struct IOwriter
         free_cuda(d_vart);
     }
 
+    void SwapEnd(float& var)
+    {
+        char* varArray = reinterpret_cast<char*>(&var);
+        for(long i = 0; i < static_cast<long>(sizeof(var)/2); i++)
+        {
+            std::swap(varArray[sizeof(var) - 1 - i], varArray[i]);
+        }
+    }
+
     void fill_buffer(float *qo,
                      float *qa,
                      t_patch<float> *patch,
@@ -132,15 +152,6 @@ struct IOwriter
     void reset_buffer()
     {
         reset_IO_buffer(qb, size);
-    }
-
-    void SwapEnd(float& var)
-    {
-        char* varArray = reinterpret_cast<char*>(&var);
-        for(long i = 0; i < static_cast<long>(sizeof(var)/2); i++)
-        {
-            std::swap(varArray[sizeof(var) - 1 - i], varArray[i]);
-        }
     }
 
     void go_vtk(const domdcomp& domdcomp_instance,
@@ -296,5 +307,61 @@ struct IOwriter
     float *vart;
     std::vector<std::string> variable_names;
 };
+
+void helper_vtk(const domdcomp& domdcomp_instance,
+                grid<float>& grid_instance,
+                int noutput,
+                std::string filename,
+                float *data)
+{
+    std::ofstream vtkstream;
+    vtkstream.open(filename, std::ios::out | std::ios::app | std::ios::binary);
+    if (vtkstream) {
+        int block_points = (domdcomp_instance.lxio + 1) *
+            (domdcomp_instance.leto + 1) *
+            (domdcomp_instance.lzeo + 1);
+
+        // header
+        vtkstream << "# vtk DataFile Version 2.0" << "\n";
+        vtkstream << "Output compact schemes" << "\n";
+        vtkstream << "BINARY" << "\n";
+
+        // grid
+        vtkstream << "DATASET STRUCTURED_GRID" << std::endl;
+        vtkstream << "DIMENSIONS " << domdcomp_instance.lxio + 1 << " "
+            << domdcomp_instance.leto + 1 << " "
+            << domdcomp_instance.lzeo + 1 << std::endl;
+        vtkstream << "POINTS " << block_points << " float" << std::endl;
+        float tmp;
+        for (unsigned int i = 0; i < block_points; ++i) {
+            tmp = SwapEnd2(grid_instance.patch[0][i]);
+            vtkstream.write((char*)&tmp, sizeof(float));
+            tmp = SwapEnd2(grid_instance.patch[1][i]);
+            vtkstream.write((char*)&tmp, sizeof(float));
+            tmp = SwapEnd2(grid_instance.patch[2][i]);
+            vtkstream.write((char*)&tmp, sizeof(float));
+        }
+
+        // data
+        std::cout << "block points = " << block_points << std::endl;
+        vtkstream << "POINT_DATA " << block_points << std::endl;
+        for(unsigned int var = 0; var < noutput; ++var)
+        {
+            vtkstream << "SCALARS test float 1\n";
+            vtkstream << "LOOKUP_TABLE default\n";
+            for(unsigned int i = 0; i < block_points; ++i)
+            {
+                tmp = SwapEnd2(data[i + var * block_points]);
+                vtkstream.write((char*)&tmp, sizeof(float));
+            }
+        }
+
+        // close file
+        vtkstream.close();
+    } else {
+        std::cout << "ERROR opening vtk file" << std::endl;
+        exit(1);
+    }
+}
 
 #endif
