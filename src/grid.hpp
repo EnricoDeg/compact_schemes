@@ -67,7 +67,7 @@ struct grid
 {
     grid(const domdcomp& domdcomp_instance)
     {
-        size_t nelements = domdcomp_instance.lmx;
+        size_t nelements = domdcomp_instance.lmx + 1;
 
         xim  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
         etm  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
