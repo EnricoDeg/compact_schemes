@@ -75,7 +75,7 @@ CANARD_HOST_DEVICE CANARD_FORCE_INLINE unsigned int get_block_stridey(t_dcomp dc
     static_assert(Axis >= 0 && Axis < 3, "Axis index must be 0, 1, or 2");
     if constexpr(Axis == 0)
     {
-        return dcomp_info.let;
+        return dcomp_info.let * dcomp_info.lxi;
     }
     else if constexpr(Axis == 1)
     {
