@@ -3,8 +3,8 @@ driver:
   - nts: 0
   - output_enabled: true
 domdcomp:
-  - nbpc: [2, 1, 1]
-  - lximb: [2047]
+  - nbpc: [1, 1, 1]
+  - lximb: [63]
   - letmb: [63]
   - lzemb: [63]
   - nbbc: [10, 10, 10, 10, 10, 10]
@@ -13,7 +13,9 @@ grid:
   - doml0: 0.5
   - doml1: 0.5
   - domh: 0.5
-  - span: 0.1
+  - span: 0.01
+  - szth0: 0.1
+  - szth1: 0.1
 physics:
   - amach1: 0.3
   - amach2: 0.0
@@ -22,3 +24,5 @@ physics:
   - tempoo: 300.0
   - timf: 0.0
   - nsmf: false
+sponge:
+  - szco: 10.0

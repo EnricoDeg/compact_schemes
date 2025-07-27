@@ -11,6 +11,7 @@
 #include "gcbc.hpp"
 #include "grid.hpp"
 #include "physics_pc.hpp"
+#include "sponge.hpp"
 
 // Main program
 int main()
@@ -114,6 +115,12 @@ int main()
                            domdcomp_instance.mcd,
                            &numerics_instance);
 
+    // sponge
+    YAML::Node sponge_yaml = config["sponge"];
+    auto sponge_instance = sponge<float>();
+    sponge_instance.read_config(sponge_yaml);
+    sponge_instance.up(grid_instance, dcomp_info.lmx);
+
     cudaStream_t stream[5];
     for(int i=0; i<5; i++) cudaStreamCreate(&stream[i]);
 
@@ -123,7 +130,7 @@ int main()
     {
         n = 0;
         ndt = 0;
-        dt = 0.1f;
+        dt = 0.01f;
         dts = 0.0f;
         dte = 0.0f;
         timo = 0.0f;
@@ -134,13 +141,13 @@ int main()
         // read restart file
     }
 
-    float tmax = 1.0;
+    float tmax = 0.1;
     float cfl = 0.95f;
     bool nout;
     float res;
     int ndati = -1;
     float dtk, dtko;
-    int ndata = 2;
+    int ndata = 10;
 
     check_mpi(MPI_Barrier(MPI_COMM_WORLD));
 
@@ -233,6 +240,7 @@ int main()
             //         domdcomp_instance.nbc, mcd);
 
             // sponge condition
+            sponge_instance.go(d_qa, d_de, dcomp_info.lmx);
 
             // update conservative variables
             dtko = dt * min(nk-1, 1) / (nkrk - nk + 2);
@@ -261,6 +269,8 @@ int main()
         {
             if(timo > (-tmax) / ndata)
             {
+                if(nout && world_rank == 0)
+                    std::cout << "writing output n = " << n << "\n";
                 io_instance.fill_buffer(d_qo,
                     d_qa, grid_instance.d_patch, dt, physics_instance.umf, nout);
                 io_instance.go(domdcomp_instance, grid_instance, nout);

@@ -92,6 +92,12 @@ struct grid
 
         YAML::Node span_node = grid_yaml[3]["span"];
         span = span_node.as<float>();
+
+        YAML::Node szth0_node = grid_yaml[4]["szth0"];
+        szth0 = szth0_node.as<float>();
+
+        YAML::Node szth1_node = grid_yaml[5]["szth1"];
+        szth1 = szth1_node.as<float>();
     }
 
     void generate(const domdcomp& domdcomp_instance)
@@ -362,6 +368,8 @@ struct grid
     Type doml0;
     Type doml1;
     Type domh;
+    Type szth0;
+    Type szth1;
     t_patch<Type> *d_patch;
     Type *xim;
     Type *etm;
