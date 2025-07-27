@@ -111,7 +111,8 @@ int main()
     numerics_instance.deriv_setup();
 
     // compute grid metrics (needs numerics instance to be initialized)
-    grid_instance.calc_metrics(dcomp_info,
+    grid_instance.calc_metrics(domdcomp_instance,
+                           dcomp_info,
                            domdcomp_instance.mcd,
                            &numerics_instance);
 

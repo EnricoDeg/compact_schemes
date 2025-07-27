@@ -54,14 +54,16 @@ struct grid
     {
         size_t nelements = domdcomp_instance.lmx + 1;
 
-        xim  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
-        etm  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
-        zem  = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
-        yaco = allocate_cuda<Type>(nelements);
+        xim   = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
+        etm   = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
+        zem   = allocate_cuda<Type>(NumberOfSpatialDims * nelements);
+        yaco  = allocate_cuda<Type>(nelements);
+        cm[0] = allocate_cuda<Type>(2 * domdcomp_instance.nbsize[0] * NumberOfSpatialDims);
+        cm[1] = allocate_cuda<Type>(2 * domdcomp_instance.nbsize[1] * NumberOfSpatialDims);
+        cm[2] = allocate_cuda<Type>(2 * domdcomp_instance.nbsize[2] * NumberOfSpatialDims);
         patch[0] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
         patch[1] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
         patch[2] = (Type *)malloc((domdcomp_instance.lmx + 1) * sizeof(Type));
-
     }
 
     void read_config(YAML::Node& grid_yaml)
@@ -222,7 +224,8 @@ struct grid
         memcpy_cuda_h2d(tmp, patch[2], domdcomp_instance.lmx+1);
     }
 
-    void calc_metrics(t_dcomp dcomp_info,
+    void calc_metrics(const domdcomp& domdcomp_instance,
+                      t_dcomp dcomp_info,
                       int mcd[2][3],
                       numerics_pc<Type> *numerics_instance)
     {
@@ -322,6 +325,99 @@ struct grid
                                dek,
                                dcomp_info.lmx);
 
+        // compute cm1, cm2, cm3 on cpu and move it to gpu
+        // data movement to host
+        Type * yaco_h = (Type *)malloc(dcomp_info.lmx * sizeof(Type));
+        memcpy_cuda_d2h(yaco_h, yaco, dcomp_info.lmx);
+
+        Type *xim_h = (Type *)malloc(NumberOfSpatialDims * dcomp_info.lmx * sizeof(Type));
+        memcpy_cuda_d2h(xim_h, xim, NumberOfSpatialDims * dcomp_info.lmx);
+
+        Type *etm_h = (Type *)malloc(NumberOfSpatialDims * dcomp_info.lmx * sizeof(Type));
+        memcpy_cuda_d2h(etm_h, etm, NumberOfSpatialDims * dcomp_info.lmx);
+
+        Type *zem_h = (Type *)malloc(NumberOfSpatialDims * dcomp_info.lmx * sizeof(Type));
+        memcpy_cuda_d2h(zem_h, zem, NumberOfSpatialDims * dcomp_info.lmx);
+
+        unsigned int offset0 = dcomp_info.let * dcomp_info.lze;
+        Type *cm0_h = (Type *)malloc(2 * NumberOfSpatialDims *
+            offset0 * sizeof(Type));
+
+        unsigned int offset1 = dcomp_info.lxi * dcomp_info.lze;
+        Type *cm1_h = (Type *)malloc(2 * NumberOfSpatialDims *
+            offset1 * sizeof(Type));
+
+        unsigned int offset2 = dcomp_info.lxi * dcomp_info.let;
+        Type *cm2_h = (Type *)malloc(2 * NumberOfSpatialDims *
+            offset2 * sizeof(Type));
+
+        // compute
+        Type rv[NumberOfSpatialDims];
+        Type fctr;
+        for(unsigned int nn = 0; nn < NumberOfSpatialDims; ++nn)
+        {
+            for(unsigned int ip = 0; ip < 2; ++ip)
+            {
+                unsigned int i = ip * domdcomp_instance.ijk[0][nn];
+                for(unsigned int k = 0; k <= domdcomp_instance.ijk[2][nn]; ++k)
+                {
+                    unsigned int kp = k * (domdcomp_instance.ijk[1][nn] + 1);
+                    for(unsigned int j = 0; j <= domdcomp_instance.ijk[1][nn]; ++j)
+                    {
+                        unsigned int jk = kp + j;
+                        unsigned int l = host::indx3(i, j, k, nn,
+                            domdcomp_instance.lxi, domdcomp_instance.let);
+                        if(nn == 0)
+                        {
+                            rv[0] = yaco_h[l] * xim_h[l + 0 * dcomp_info.lmx];
+                            rv[1] = yaco_h[l] * xim_h[l + 1 * dcomp_info.lmx];
+                            rv[2] = yaco_h[l] * xim_h[l + 2 * dcomp_info.lmx];
+                            fctr  = 1.0 / std::sqrt(rv[0] * rv[0] + rv[1] * rv[1] + rv[2] * rv[2]);
+                            cm0_h[jk + 0 * offset0 + ip * offset0 * NumberOfSpatialDims] = fctr * rv[0];
+                            cm0_h[jk + 1 * offset0 + ip * offset0 * NumberOfSpatialDims] = fctr * rv[1];
+                            cm0_h[jk + 2 * offset0 + ip * offset0 * NumberOfSpatialDims] = fctr * rv[2];
+                        }
+                        else if(nn == 1)
+                        {
+                            rv[0] = yaco_h[l] * etm_h[l + 0 * dcomp_info.lmx];
+                            rv[1] = yaco_h[l] * etm_h[l + 1 * dcomp_info.lmx];
+                            rv[2] = yaco_h[l] * etm_h[l + 2 * dcomp_info.lmx];
+                            fctr  = 1.0 / std::sqrt(rv[0] * rv[0] + rv[1] * rv[1] + rv[2] * rv[2]);
+                            cm1_h[jk + 0 * offset1 + ip * offset1 * NumberOfSpatialDims] = fctr * rv[0];
+                            cm1_h[jk + 1 * offset1 + ip * offset1 * NumberOfSpatialDims] = fctr * rv[1];
+                            cm1_h[jk + 2 * offset1 + ip * offset1 * NumberOfSpatialDims] = fctr * rv[2];
+                        }
+                        else if(nn == 2)
+                        {
+                            rv[0] = yaco_h[l] * zem_h[l + 0 * dcomp_info.lmx];
+                            rv[1] = yaco_h[l] * zem_h[l + 1 * dcomp_info.lmx];
+                            rv[2] = yaco_h[l] * zem_h[l + 2 * dcomp_info.lmx];
+                            fctr  = 1.0 / std::sqrt(rv[0] * rv[0] + rv[1] * rv[1] + rv[2] * rv[2]);
+                            cm2_h[jk + 0 * offset2 + ip * offset2 * NumberOfSpatialDims] = fctr * rv[0];
+                            cm2_h[jk + 1 * offset2 + ip * offset2 * NumberOfSpatialDims] = fctr * rv[1];
+                            cm2_h[jk + 2 * offset2 + ip * offset2 * NumberOfSpatialDims] = fctr * rv[2];
+                        }
+                    }
+                }
+            }
+        }
+
+        // data movement to device
+        memcpy_cuda_h2d(cm[0], cm0_h, 2 * NumberOfSpatialDims *
+            dcomp_info.let * dcomp_info.lze);
+        memcpy_cuda_h2d(cm[1], cm1_h, 2 * NumberOfSpatialDims *
+            dcomp_info.lxi * dcomp_info.lze);
+        memcpy_cuda_h2d(cm[2], cm2_h, 2 * NumberOfSpatialDims *
+            dcomp_info.lxi * dcomp_info.let);
+
+        free(cm2_h);
+        free(cm1_h);
+        free(cm0_h);
+        free(zem_h);
+        free(etm_h);
+        free(xim_h);
+        free(yaco_h);
+
         free_cuda(qok);
         free_cuda(qak);
         free_cuda(dek);
@@ -333,6 +429,9 @@ struct grid
         free_cuda(etm);
         free_cuda(zem);
         free_cuda(yaco);
+        free_cuda(cm[0]);
+        free_cuda(cm[1]);
+        free_cuda(cm[2]);
         if(patch_generated)
         {
             Type *tmp;
@@ -362,6 +461,7 @@ struct grid
     Type *yaco;
     bool patch_generated = false;
     Type *patch[NumberOfSpatialDims];
+    Type *cm[NumberOfSpatialDims];
 };
 
 #endif
