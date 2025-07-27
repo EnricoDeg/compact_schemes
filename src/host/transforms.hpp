@@ -70,6 +70,22 @@ size_t get_face_size(t_dcomp dcomp_info)
     }
 }
 
+int indx3(int i, int j, int k, int nn, int lxi, int let) {
+    assert(nn < 3);
+    if(nn == 0)
+    {
+        return (k*(let+1)+j)*(lxi+1)+i;
+    }
+    else if(nn == 1)
+    {
+        return (j*(let+1)+i)*(lxi+1)+k;
+    }
+    else
+    {
+        return (i*(let+1)+k)*(lxi+1)+j;
+    }
+}
+
 }
 
 #endif

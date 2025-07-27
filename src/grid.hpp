@@ -36,6 +36,7 @@
 
 #include "common/data_types.hpp"
 #include "common/parameters.hpp"
+#include "host/transforms.hpp"
 
 #include "mpi/check.hpp"
 
@@ -45,22 +46,6 @@
 #include "domdcomp.hpp"
 
 #include "numerics_pc.hpp"
-
-int indx3(int i, int j, int k, int nn, int lxi, int let) {
-    assert(nn < 3);
-    if(nn == 0)
-    {
-        return (k*(let+1)+j)*(lxi+1)+i;
-    }
-    else if(nn == 1)
-    {
-        return (j*(let+1)+i)*(lxi+1)+k;
-    }
-    else
-    {
-        return (i*(let+1)+k)*(lxi+1)+j;
-    }
-}
 
 template<typename Type>
 struct grid
@@ -167,7 +152,7 @@ struct grid
                     for (int j = 0; j <= domdcomp_instance.letm[id]; ++j) {
                         int lq = lp + lio[j + k * (domdcomp_instance.letm[id] + 1)];
                         for (int i = 0; i <= domdcomp_instance.lxim[id]; ++i) {
-                            int l = indx3(i, j, k, 0,
+                            int l = host::indx3(i, j, k, 0,
                                 domdcomp_instance.lxim[id], domdcomp_instance.letm[id]);
                             buffer_x[l] = grid_points_global[0][lq+i];
                             buffer_y[l] = grid_points_global[1][lq+i];
@@ -181,7 +166,7 @@ struct grid
                     for (int k = 0; k <= domdcomp_instance.lzem[id]; ++k) {
                         for (int j = 0; j <= domdcomp_instance.letm[id]; ++j) {
                             for (int i = 0; i <= domdcomp_instance.lxim[id]; ++i) {
-                                int l = indx3(i, j, k, 0,
+                                int l = host::indx3(i, j, k, 0,
                                     domdcomp_instance.lxim[id], domdcomp_instance.letm[id]);
                                 patch[0][l] = buffer_x[l];
                                 patch[1][l] = buffer_y[l];
