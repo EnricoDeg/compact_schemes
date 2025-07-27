@@ -301,7 +301,7 @@ struct domdcomp
         std::cout << myid << ": nbpc[2][0] = " << nbpc[2][0] << std::endl;
 
         std::cout << myid << ": nbc[0][0] = " << nbc[0][0] << std::endl;
-        std::cout << myid << ": nbc[0][1] = " << nbc[0][2] << std::endl;
+        std::cout << myid << ": nbc[0][1] = " << nbc[0][1] << std::endl;
         std::cout << myid << ": nbc[0][2] = " << nbc[0][2] << std::endl;
         std::cout << myid << ": nbc[1][0] = " << nbc[1][0] << std::endl;
         std::cout << myid << ": nbc[1][1] = " << nbc[1][1] << std::endl;
