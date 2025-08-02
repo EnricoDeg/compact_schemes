@@ -43,7 +43,7 @@ static constexpr double ab10    =  3.0 / 4.0;
 
 
 static constexpr unsigned int lmd = 8;
-static constexpr unsigned int mbci = 4;
+static constexpr unsigned int mbci = 3;
 static constexpr unsigned int NumberOfVariables = 5;
 static constexpr unsigned int NumberOfSpatialDims = 3;
 static constexpr unsigned int NumberOfFaces = 2;

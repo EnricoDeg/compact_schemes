@@ -4,6 +4,7 @@
 #include "yaml-cpp/yaml.h"
 
 #include "common/parameters.hpp"
+#include "cuda/common.hpp"
 #include "cuda/general.hpp"
 #include "domdcomp.hpp"
 #include "IO.hpp"
@@ -56,28 +57,17 @@ int main()
     dcomp_info.lze = domdcomp_instance.lze + 1;
     dcomp_info.lmx = dcomp_info.lxi * dcomp_info.let * dcomp_info.lze;
 
-    // cm
-    // float *d_cm0, *d_cm1, *d_cm2;
-    // cudaMalloc(&d_cm0, 2 * NumberOfSpatialDims * dcomp_info.let * dcomp_info.lze * sizeof(float));
-    // cudaMalloc(&d_cm1, 2 * NumberOfSpatialDims * dcomp_info.lxi * dcomp_info.lze * sizeof(float));
-    // cudaMalloc(&d_cm2, 2 * NumberOfSpatialDims * dcomp_info.lxi * dcomp_info.let * sizeof(float));
-
-    // float *d_cm[3];
-    // d_cm[0] = d_cm0;
-    // d_cm[1] = d_cm1;
-    // d_cm[2] = d_cm2;
-
     // qa
-    float * d_qa;
-    cudaMalloc(&d_qa, NumberOfVariables * dcomp_info.lmx * sizeof(float));
+    float * d_qa = allocate_cuda<float>(NumberOfVariables *
+        dcomp_info.lmx);
 
     // qo
-    float * d_qo;
-    cudaMalloc(&d_qo, NumberOfVariables * dcomp_info.lmx * sizeof(float));
+    float * d_qo = allocate_cuda<float>(NumberOfVariables *
+        dcomp_info.lmx);
 
     // de
-    float * d_de;
-    cudaMalloc(&d_de, NumberOfVariables * dcomp_info.lmx * sizeof(float));
+    float * d_de = allocate_cuda<float>(NumberOfVariables *
+        dcomp_info.lmx);
 
     // pressure
     float * d_pressure;
@@ -86,10 +76,6 @@ int main()
     // ss
     float *d_ss;
     cudaMalloc(&d_ss, dcomp_info.lmx * sizeof(float));
-
-    // npex
-    // int * d_npex;
-    // cudaMalloc(&d_npex, dcomp_info.lmx * sizeof(int));
 
     // generate grid
     YAML::Node grid_yaml = config["grid"];
@@ -121,6 +107,9 @@ int main()
     auto sponge_instance = sponge<float>();
     sponge_instance.read_config(sponge_yaml);
     sponge_instance.up(grid_instance, dcomp_info.lmx);
+
+    // gcbc
+    auto gcbc_instance = gcbc<float, int>(domdcomp_instance, grid_instance.yaco);
 
     cudaStream_t stream[5];
     for(int i=0; i<5; i++) cudaStreamCreate(&stream[i]);
@@ -231,17 +220,22 @@ int main()
                                          &numerics_instance,
                                          &stream[0]);
 
-            // float dtwi = 1 / dt;
-
             // GCBC
-            // auto gcbc_instance = gcbc<float, int>(dcomp_info);
-            // gcbc_go(numerics_instance.drva_buffer, d_cm, gcbc_instance.drvb,
-            //         d_qa, d_de, d_pressure, grid_instance.yaco, gcbc_instance.sbcc,
-            //         umf, dudtmf, dcomp_info, dtwi,
-            //         domdcomp_instance.nbc, mcd);
+            // gcbc_instance.go(numerics_instance.drva_buffer,
+            //                  grid_instance.cm,
+            //                  d_qa,
+            //                  d_de,
+            //                  d_pressure,
+            //                  grid_instance.yaco,
+            //                  physics_instance.umf,
+            //                  physics_instance.dudtmf,
+            //                  dcomp_info,
+            //                  1.0 / dt,
+            //                  domdcomp_instance.nbc,
+            //                  domdcomp_instance.mcd);
 
             // sponge condition
-            sponge_instance.go(d_qa, d_de, dcomp_info.lmx);
+            // sponge_instance.go(d_qa, d_de, dcomp_info.lmx);
 
             // update conservative variables
             dtko = dt * min(nk-1, 1) / (nkrk - nk + 2);
@@ -257,8 +251,10 @@ int main()
                                           dcomp_info.lmx);
 
             // wall temperature / velocity condition
-
-            // wall_condition_update(d_qa, d_npex, umf, dcomp_info, domdcomp_instance.nbc);
+            // gcbc_instance.wall_condition_go(d_qa,
+            //                                 physics_instance.umf,
+            //                                 dcomp_info,
+            //                                 domdcomp_instance.nbc);
         }
 
         // advance in time
@@ -281,6 +277,11 @@ int main()
     } while(timo < tmax && (dt != 0.0f || n <= 2));
 
     for(int i=0; i<5; i++) cudaStreamDestroy(stream[i]);
+
+    // free memory
+    free_cuda(d_qa);
+    free_cuda(d_qo);
+    free_cuda(d_de);
 
     // Finalize the MPI environment.
     check_mpi(MPI_Finalize());
