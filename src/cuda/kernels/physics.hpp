@@ -38,6 +38,7 @@
 #include "cuda/kernels/transforms.hpp"
 #include "cuda/kernels/reductionShMem.hpp"
 #include "cuda/kernels/functional.hpp"
+#include "cuda/kernels/vector_types.hpp"
 
 template<typename Type>
 CANARD_GLOBAL void init_physics_kernel(Type *qa,
@@ -70,7 +71,7 @@ CANARD_GLOBAL void init_physics_kernel(Type *qa,
     }
 }
 
-template<bool EnableViscous, typename Type>
+template<bool EnableViscous, int VectorSize, typename Type>
 CANARD_GLOBAL void calc_fluxes_pre_compute_kernel(Type *buffer,
                                                   Type *qa,
                                                   Type *pressure,
@@ -83,143 +84,289 @@ CANARD_GLOBAL void calc_fluxes_pre_compute_kernel(Type *buffer,
                                                   t_point<Type> umf,
                                                   unsigned int size)
 {
+    using VecType = Vector_Type<Type,VectorSize>;
+
     unsigned int thread_id = get_thread_global_idx();
 
-    if(thread_id < size)
+    if(thread_id < size / VectorSize)
     {
         // Gmem -> VGPR
-        Type de_vgpr[NumberOfVariables];
-        de_vgpr[0] = de[thread_id];
-        de_vgpr[1] = de[thread_id + size];
-        de_vgpr[2] = de[thread_id + 2 * size];
-        de_vgpr[3] = de[thread_id + 3 * size];
-        de_vgpr[4] = de[thread_id + 4 * size];
+        VecType de_vgpr[NumberOfSpatialDims];
+        de_vgpr[0] = *reinterpret_cast<VecType*>(de + thread_id * VectorSize + size);
+        de_vgpr[1] = *reinterpret_cast<VecType*>(de + thread_id * VectorSize + 2 * size);
+        de_vgpr[2] = *reinterpret_cast<VecType*>(de + thread_id * VectorSize + 3 * size);
 
-        Type xim_vgpr[NumberOfSpatialDims];
-        xim_vgpr[0] = xim[thread_id];
-        xim_vgpr[1] = xim[thread_id + size];
-        xim_vgpr[2] = xim[thread_id + 2 * size];
+        VecType xim_vgpr[NumberOfSpatialDims];
+        xim_vgpr[0] = *reinterpret_cast<VecType*>(xim + thread_id * VectorSize);
+        xim_vgpr[1] = *reinterpret_cast<VecType*>(xim + thread_id * VectorSize + size);
+        xim_vgpr[2] = *reinterpret_cast<VecType*>(xim + thread_id * VectorSize + 2 * size);
 
-        Type etm_vgpr[NumberOfSpatialDims];
-        etm_vgpr[0] = etm[thread_id];
-        etm_vgpr[1] = etm[thread_id + size];
-        etm_vgpr[2] = etm[thread_id + 2 * size];
+        VecType etm_vgpr[NumberOfSpatialDims];
+        etm_vgpr[0] = *reinterpret_cast<VecType*>(etm + thread_id * VectorSize);
+        etm_vgpr[1] = *reinterpret_cast<VecType*>(etm + thread_id * VectorSize + size);
+        etm_vgpr[2] = *reinterpret_cast<VecType*>(etm + thread_id * VectorSize + 2 * size);
 
-        Type zem_vgpr[NumberOfSpatialDims];
-        zem_vgpr[0] = zem[thread_id];
-        zem_vgpr[1] = zem[thread_id + size];
-        zem_vgpr[2] = zem[thread_id + 2 * size];
+        VecType zem_vgpr[NumberOfSpatialDims];
+        zem_vgpr[0] = *reinterpret_cast<VecType*>(zem + thread_id * VectorSize);
+        zem_vgpr[1] = *reinterpret_cast<VecType*>(zem + thread_id * VectorSize + size);
+        zem_vgpr[2] = *reinterpret_cast<VecType*>(zem + thread_id * VectorSize + 2 * size);
 
-        Type qa_vgpr[NumberOfVariables];
-        qa_vgpr[0] = qa[thread_id];
-        qa_vgpr[1] = qa[thread_id + size];
-        qa_vgpr[2] = qa[thread_id + 2 * size];
-        qa_vgpr[3] = qa[thread_id + 3 * size];
-        qa_vgpr[4] = qa[thread_id + 4 * size];
+        VecType qa_vgpr;
 
-        Type txx = stress_tensor->xx[thread_id];
-        Type tyy = stress_tensor->yy[thread_id];
-        Type tzz = stress_tensor->zz[thread_id];
-        Type txy = stress_tensor->xy[thread_id];
-        Type tyz = stress_tensor->yz[thread_id];
-        Type tzx = stress_tensor->zx[thread_id];
+        VecType p_vgpr = *reinterpret_cast<VecType*>(pressure + thread_id * VectorSize);
 
-        Type hxx = heat_fluxes->xx[thread_id];
-        Type hyy = heat_fluxes->yy[thread_id];
-        Type hzz = heat_fluxes->zz[thread_id];
-
-        Type p_vgpr = pressure[thread_id];
-
-        Type rr[NumberOfSpatialDims];
-        Type ss[NumberOfSpatialDims];
+        VecType rr[NumberOfSpatialDims];
+        VecType ss[NumberOfSpatialDims];
 
         // Compute
-        rr[0] = de_vgpr[1] + umf.x;
-        rr[1] = de_vgpr[2] + umf.y;
-        rr[2] = de_vgpr[3] + umf.z;
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[0].vals[j] = de_vgpr[0].vals[j] + umf.x;
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[1].vals[j] = de_vgpr[1].vals[j] + umf.y;
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[2].vals[j] = de_vgpr[2].vals[j] + umf.z;
+        });
 
-        ss[0] = xim_vgpr[0] * rr[0] + xim_vgpr[1] * rr[1] + xim_vgpr[2] * rr[2];
-        ss[1] = etm_vgpr[0] * rr[0] + etm_vgpr[1] * rr[1] + etm_vgpr[2] * rr[2];
-        ss[2] = zem_vgpr[0] * rr[0] + zem_vgpr[1] * rr[1] + zem_vgpr[2] * rr[2];
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            ss[0].vals[j] = xim_vgpr[0].vals[j] * rr[0].vals[j] +
+                            xim_vgpr[1].vals[j] * rr[1].vals[j] +
+                            xim_vgpr[2].vals[j] * rr[2].vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            ss[1].vals[j] = etm_vgpr[0].vals[j] * rr[0].vals[j] +
+                            etm_vgpr[1].vals[j] * rr[1].vals[j] +
+                            etm_vgpr[2].vals[j] * rr[2].vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            ss[2].vals[j] = zem_vgpr[0].vals[j] * rr[0].vals[j] +
+                            zem_vgpr[1].vals[j] * rr[1].vals[j] +
+                            zem_vgpr[2].vals[j] * rr[2].vals[j];
+        });
 
-        rr[0] = qa_vgpr[0] * ss[0];
-        rr[1] = qa_vgpr[0] * ss[1];
-        rr[2] = qa_vgpr[0] * ss[2];
+        qa_vgpr = *reinterpret_cast<VecType*>(qa + thread_id * VectorSize);
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[0].vals[j] = qa_vgpr.vals[j] * ss[0].vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[1].vals[j] = qa_vgpr.vals[j] * ss[1].vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[2].vals[j] = qa_vgpr.vals[j] * ss[2].vals[j];
+        });
 
         details::static_for<0, NumberOfSpatialDims, 1>{}([&](unsigned int j)
         {
-            buffer[thread_id + j * size + 0 * size * NumberOfSpatialDims] = rr[j];
+            *(VecType*)(buffer + thread_id * VectorSize + j * size + 0 * size * NumberOfSpatialDims) = rr[j];
         });
 
-        rr[0] = qa_vgpr[1] * ss[0] + xim_vgpr[0] * p_vgpr;
-        rr[1] = qa_vgpr[1] * ss[1] + etm_vgpr[0] * p_vgpr;
-        rr[2] = qa_vgpr[1] * ss[2] + zem_vgpr[0] * p_vgpr;
+        qa_vgpr = *reinterpret_cast<VecType*>(qa + thread_id * VectorSize + size);
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[0].vals[j] = qa_vgpr.vals[j] * ss[0].vals[j] +
+                            xim_vgpr[0].vals[j] * p_vgpr.vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[1].vals[j] = qa_vgpr.vals[j] * ss[1].vals[j] +
+                            etm_vgpr[0].vals[j] * p_vgpr.vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[2].vals[j] = qa_vgpr.vals[j] * ss[2].vals[j] +
+                            zem_vgpr[0].vals[j] * p_vgpr.vals[j];
+        });
 
+        VecType txy = *reinterpret_cast<VecType*>(stress_tensor->xy + thread_id * VectorSize);
+        VecType tzx = *reinterpret_cast<VecType*>(stress_tensor->zx + thread_id * VectorSize);
         if constexpr(EnableViscous)
         {
-            rr[0] -= (xim_vgpr[0] * txx + xim_vgpr[1] * txy + xim_vgpr[2] * tzx);
-            rr[1] -= (etm_vgpr[0] * txx + etm_vgpr[1] * txy + etm_vgpr[2] * tzx);
-            rr[2] -= (zem_vgpr[0] * txx + zem_vgpr[1] * txy + zem_vgpr[2] * tzx);
+            VecType txx = *reinterpret_cast<VecType*>(stress_tensor->xx + thread_id * VectorSize);
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[0].vals[j] -= (xim_vgpr[0].vals[j] * txx.vals[j] +
+                                  xim_vgpr[1].vals[j] * txy.vals[j] +
+                                  xim_vgpr[2].vals[j] * tzx.vals[j]);
+            });
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[1].vals[j] -= (etm_vgpr[0].vals[j] * txx.vals[j] +
+                                  etm_vgpr[1].vals[j] * txy.vals[j] +
+                                  etm_vgpr[2].vals[j] * tzx.vals[j]);
+            });
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[2].vals[j] -= (zem_vgpr[0].vals[j] * txx.vals[j] +
+                                  zem_vgpr[1].vals[j] * txy.vals[j] +
+                                  zem_vgpr[2].vals[j] * tzx.vals[j]);
+            });
         }
 
         details::static_for<0, NumberOfSpatialDims, 1>{}([&](unsigned int j)
         {
-            buffer[thread_id + j * size + 1 * size * NumberOfSpatialDims] = rr[j];
+            *(VecType*)(buffer + thread_id * VectorSize + j * size + 1 * size * NumberOfSpatialDims) = rr[j];
         });
 
-        rr[0] = qa_vgpr[2] * ss[0] + xim_vgpr[1] * p_vgpr;
-        rr[1] = qa_vgpr[2] * ss[1] + etm_vgpr[1] * p_vgpr;
-        rr[2] = qa_vgpr[2] * ss[2] + zem_vgpr[1] * p_vgpr;
+        qa_vgpr = *reinterpret_cast<VecType*>(qa + thread_id * VectorSize + 2 * size);
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[0].vals[j] = qa_vgpr.vals[j] * ss[0].vals[j] +
+                            xim_vgpr[1].vals[j] * p_vgpr.vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[1].vals[j] = qa_vgpr.vals[j] * ss[1].vals[j] +
+                            etm_vgpr[1].vals[j] * p_vgpr.vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[2].vals[j] = qa_vgpr.vals[j] * ss[2].vals[j] +
+                            zem_vgpr[1].vals[j] * p_vgpr.vals[j];
+        });
 
+        VecType tyz = *reinterpret_cast<VecType*>(stress_tensor->yz + thread_id * VectorSize);
         if constexpr(EnableViscous)
         {
-            rr[0] -= (xim_vgpr[0] * txy + xim_vgpr[1] * tyy + xim_vgpr[2] * tyz);
-            rr[1] -= (etm_vgpr[0] * txy + etm_vgpr[1] * tyy + etm_vgpr[2] * tyz);
-            rr[2] -= (zem_vgpr[0] * txy + zem_vgpr[1] * tyy + zem_vgpr[2] * tyz);
+            VecType tyy = *reinterpret_cast<VecType*>(stress_tensor->yy + thread_id * VectorSize);
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[0].vals[j] -= (xim_vgpr[0].vals[j] * txy.vals[j] +
+                                  xim_vgpr[1].vals[j] * tyy.vals[j] +
+                                  xim_vgpr[2].vals[j] * tyz.vals[j]);
+            });
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[1].vals[j] -= (etm_vgpr[0].vals[j] * txy.vals[j] +
+                                  etm_vgpr[1].vals[j] * tyy.vals[j] +
+                                  etm_vgpr[2].vals[j] * tyz.vals[j]);
+            });
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[2].vals[j] -= (zem_vgpr[0].vals[j] * txy.vals[j] +
+                                  zem_vgpr[1].vals[j] * tyy.vals[j] +
+                                  zem_vgpr[2].vals[j] * tyz.vals[j]);
+            });
         }
 
         details::static_for<0, NumberOfSpatialDims, 1>{}([&](unsigned int j)
         {
-            buffer[thread_id + j * size + 2 * size * NumberOfSpatialDims] = rr[j];
+            *(VecType*)(buffer + thread_id * VectorSize + j * size + 2 * size * NumberOfSpatialDims) = rr[j];
         });
 
-        rr[0] = qa_vgpr[3] * ss[0] + xim_vgpr[2] * p_vgpr;
-        rr[1] = qa_vgpr[3] * ss[1] + etm_vgpr[2] * p_vgpr;
-        rr[2] = qa_vgpr[3] * ss[2] + zem_vgpr[2] * p_vgpr;
+        qa_vgpr = *reinterpret_cast<VecType*>(qa + thread_id * VectorSize + 3 * size);
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[0].vals[j] = qa_vgpr.vals[j] * ss[0].vals[j] + xim_vgpr[2].vals[j] * p_vgpr.vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[1].vals[j] = qa_vgpr.vals[j] * ss[1].vals[j] + etm_vgpr[2].vals[j] * p_vgpr.vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[2].vals[j] = qa_vgpr.vals[j] * ss[2].vals[j] + zem_vgpr[2].vals[j] * p_vgpr.vals[j];
+        });
 
         if constexpr(EnableViscous)
         {
-            rr[0] -= (xim_vgpr[0] * tzx + xim_vgpr[1] * tyz + xim_vgpr[2] * tzz);
-            rr[1] -= (etm_vgpr[0] * tzx + etm_vgpr[1] * tyz + etm_vgpr[2] * tzz);
-            rr[2] -= (zem_vgpr[0] * tzx + zem_vgpr[1] * tyz + zem_vgpr[2] * tzz);
+            VecType tzz = *reinterpret_cast<VecType*>(stress_tensor->zz + thread_id * VectorSize);
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[0].vals[j] -= (xim_vgpr[0].vals[j] * tzx.vals[j] +
+                                  xim_vgpr[1].vals[j] * tyz.vals[j] +
+                                  xim_vgpr[2].vals[j] * tzz.vals[j]);
+            });
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[1].vals[j] -= (etm_vgpr[0].vals[j] * tzx.vals[j] +
+                                  etm_vgpr[1].vals[j] * tyz.vals[j] +
+                                  etm_vgpr[2].vals[j] * tzz.vals[j]);
+            });
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[2].vals[j] -= (zem_vgpr[0].vals[j] * tzx.vals[j] +
+                                  zem_vgpr[1].vals[j] * tyz.vals[j] +
+                                  zem_vgpr[2].vals[j] * tzz.vals[j]);
+            });
         }
 
         details::static_for<0, NumberOfSpatialDims, 1>{}([&](unsigned int j)
         {
-            buffer[thread_id + j * size + 3 * size * NumberOfSpatialDims] = rr[j];
+            *(VecType*)(buffer +thread_id * VectorSize + j * size + 3 * size * NumberOfSpatialDims) = rr[j];
         });
 
-        de_vgpr[4] = qa_vgpr[4] + p_vgpr;
-        rr[0] = de_vgpr[4] * ss[0] -
-            p_vgpr * (umf.x * xim_vgpr[0] + umf.y * xim_vgpr[1] + umf.z * xim_vgpr[2]);
-        rr[1] = de_vgpr[4] * ss[1] -
-            p_vgpr * (umf.x * etm_vgpr[0] + umf.y * etm_vgpr[1] + umf.z * etm_vgpr[2]);
-        rr[2] = de_vgpr[4] * ss[2] -
-            p_vgpr * (umf.x * zem_vgpr[0] + umf.y * zem_vgpr[1] + umf.z * zem_vgpr[2]);
-
+        VecType de_vgpr4;
+        qa_vgpr = *reinterpret_cast<VecType*>(qa + thread_id * VectorSize + 4 * size);
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            de_vgpr4.vals[j] = qa_vgpr.vals[j] + p_vgpr.vals[j];
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[0].vals[j] = de_vgpr4.vals[j] * ss[0].vals[j] -
+                            p_vgpr.vals[j] *
+                            (umf.x * xim_vgpr[0].vals[j] +
+                             umf.y * xim_vgpr[1].vals[j] +
+                             umf.z * xim_vgpr[2].vals[j]);
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[1].vals[j] = de_vgpr4.vals[j] * ss[1].vals[j] -
+                            p_vgpr.vals[j] *
+                            (umf.x * etm_vgpr[0].vals[j] +
+                             umf.y * etm_vgpr[1].vals[j] +
+                             umf.z * etm_vgpr[2].vals[j]);
+        });
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rr[2].vals[j] = de_vgpr4.vals[j] * ss[2].vals[j] -
+                            p_vgpr.vals[j] *
+                            (umf.x * zem_vgpr[0].vals[j] +
+                             umf.y * zem_vgpr[1].vals[j] +
+                             umf.z * zem_vgpr[2].vals[j]);
+        });
         if constexpr(EnableViscous)
         {
-            rr[0] -= (xim_vgpr[0] * hxx + xim_vgpr[1] * hyy + xim_vgpr[2] * hzz);
-            rr[1] -= (etm_vgpr[0] * hxx + etm_vgpr[1] * hyy + etm_vgpr[2] * hzz);
-            rr[2] -= (zem_vgpr[0] * hxx + zem_vgpr[1] * hyy + zem_vgpr[2] * hzz);
+            VecType hxx = *reinterpret_cast<VecType*>(heat_fluxes->xx + thread_id * VectorSize);
+            VecType hyy = *reinterpret_cast<VecType*>(heat_fluxes->yy + thread_id * VectorSize);
+            VecType hzz = *reinterpret_cast<VecType*>(heat_fluxes->zz + thread_id * VectorSize);
+
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[0].vals[j] -= (xim_vgpr[0].vals[j] * hxx.vals[j] +
+                                  xim_vgpr[1].vals[j] * hyy.vals[j] +
+                                  xim_vgpr[2].vals[j] * hzz.vals[j]);
+            });
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[1].vals[j] -= (etm_vgpr[0].vals[j] * hxx.vals[j] +
+                                  etm_vgpr[1].vals[j] * hyy.vals[j] +
+                                  etm_vgpr[2].vals[j] * hzz.vals[j]);
+            });
+            details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+            {
+                rr[2].vals[j] -= (zem_vgpr[0].vals[j] * hxx.vals[j] +
+                                  zem_vgpr[1].vals[j] * hyy.vals[j] +
+                                  zem_vgpr[2].vals[j] * hzz.vals[j]);
+            });
         }
 
         details::static_for<0, NumberOfSpatialDims, 1>{}([&](unsigned int j)
         {
-            buffer[thread_id + j * size + 4 * size * NumberOfSpatialDims] = rr[j];
+            *(VecType*)(buffer + thread_id * VectorSize + j * size + 4 * size * NumberOfSpatialDims) = rr[j];
         });
 
-        de[thread_id + 4 * size] = de_vgpr[4];
+        *(VecType*)(de + thread_id * VectorSize + 4 * size) = de_vgpr4;
     }
 }
 
@@ -256,18 +403,22 @@ CANARD_GLOBAL void calc_viscous_shear_stress_init_kernel(Type *buffer,
 }
 
 
-template<unsigned int VariableId, typename Type>
-CANARD_GLOBAL void calc_viscous_shear_stress_post_compute_kernel(t_stress_tensor<Type> * stress_tensor,
-                                                                 t_heat_fluxes<Type> * heat_fluxes,
-                                                                 Type *buffer_ss0,
-                                                                 Type *buffer_ss1,
-                                                                 Type *buffer_ss2,
-                                                                 Type *buffer,
-                                                                 Type *xim,
-                                                                 Type *etm,
-                                                                 Type *zem,
-                                                                 unsigned int size)
+template<unsigned int VariableId, int VectorSize, typename Type>
+CANARD_GLOBAL void
+__launch_bounds__(256, 1)
+calc_viscous_shear_stress_post_compute_kernel(t_stress_tensor<Type> * stress_tensor,
+                                              t_heat_fluxes<Type> * heat_fluxes,
+                                              Type *buffer_ss0,
+                                              Type *buffer_ss1,
+                                              Type *buffer_ss2,
+                                              Type *buffer,
+                                              Type *xim,
+                                              Type *etm,
+                                              Type *zem,
+                                              unsigned int size)
 {
+    using VecType = Vector_Type<Type,VectorSize>;
+
     Type *out0, *out1, *out2;
     if constexpr(VariableId == 1)
     {
@@ -298,18 +449,48 @@ CANARD_GLOBAL void calc_viscous_shear_stress_post_compute_kernel(t_stress_tensor
     if(thread_id < size)
     {
         unsigned int offset2 = VariableId * size * NumberOfSpatialDims;
+        VecType b0_vgpr, b1_vgpr, b2_vgpr;
+        b0_vgpr =
+            *reinterpret_cast<VecType*>(buffer + thread_id * VectorSize + offset2 + 0 * size);
+        b1_vgpr =
+            *reinterpret_cast<VecType*>(buffer + thread_id * VectorSize + offset2 + 1 * size);
+        b2_vgpr =
+            *reinterpret_cast<VecType*>(buffer + thread_id * VectorSize + offset2 + 2 * size);
 
-        out0[thread_id] = xim[thread_id + 0 * size] * buffer[thread_id + offset2 + 0 * size] + 
-                          etm[thread_id + 0 * size] * buffer[thread_id + offset2 + 1 * size] +
-                          zem[thread_id + 0 * size] * buffer[thread_id + offset2 + 2 * size] ;
+        VecType tmp0, tmp1, tmp2;
+        tmp0 = *reinterpret_cast<VecType*>(xim + thread_id * VectorSize + 0 * size);
+        tmp1 = *reinterpret_cast<VecType*>(etm + thread_id * VectorSize + 0 * size);
+        tmp2 = *reinterpret_cast<VecType*>(zem + thread_id * VectorSize + 0 * size);
+        VecType rsl;
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rsl.vals[j] = tmp0.vals[j] * b0_vgpr.vals[j] + 
+                          tmp1.vals[j] * b1_vgpr.vals[j] + 
+                          tmp2.vals[j] * b2_vgpr.vals[j] ;
+        });
+        *(VecType*)(out0 + thread_id * VectorSize) = rsl;
 
-        out1[thread_id] = xim[thread_id + 1 * size] * buffer[thread_id + offset2 + 0 * size] + 
-                          etm[thread_id + 1 * size] * buffer[thread_id + offset2 + 1 * size] +
-                          zem[thread_id + 1 * size] * buffer[thread_id + offset2 + 2 * size] ;
+        tmp0 = *reinterpret_cast<VecType*>(xim + thread_id * VectorSize + 1 * size);
+        tmp1 = *reinterpret_cast<VecType*>(etm + thread_id * VectorSize + 1 * size);
+        tmp2 = *reinterpret_cast<VecType*>(zem + thread_id * VectorSize + 1 * size);
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rsl.vals[j] = tmp0.vals[j] * b0_vgpr.vals[j] + 
+                          tmp1.vals[j] * b1_vgpr.vals[j] + 
+                          tmp2.vals[j] * b2_vgpr.vals[j] ;
+        });
+        *(VecType*)(out1 + thread_id * VectorSize) = rsl;
 
-        out2[thread_id] = xim[thread_id + 2 * size] * buffer[thread_id + offset2 + 0 * size] + 
-                          etm[thread_id + 2 * size] * buffer[thread_id + offset2 + 1 * size] +
-                          zem[thread_id + 2 * size] * buffer[thread_id + offset2 + 2 * size] ;
+        tmp0 = *reinterpret_cast<VecType*>(xim + thread_id * VectorSize + 2 * size);
+        tmp1 = *reinterpret_cast<VecType*>(etm + thread_id * VectorSize + 2 * size);
+        tmp2 = *reinterpret_cast<VecType*>(zem + thread_id * VectorSize + 2 * size);
+        details::static_for<0, VectorSize, 1>{}([&](unsigned int j)
+        {
+            rsl.vals[j] = tmp0.vals[j] * b0_vgpr.vals[j] + 
+                          tmp1.vals[j] * b1_vgpr.vals[j] + 
+                          tmp2.vals[j] * b2_vgpr.vals[j] ;
+        });
+        *(VecType*)(out2 + thread_id * VectorSize) = rsl;
     }
 }
 

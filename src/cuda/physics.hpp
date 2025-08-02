@@ -67,13 +67,14 @@ void calc_fluxes_pre_compute(Type *buffer,
                              t_point<Type> umf,
                              unsigned int size)
 {
+    constexpr unsigned int vector_size = 4;
     unsigned int blockSize = 256;
-    unsigned int blockPerGrid = div_ceil(size, blockSize);
+    unsigned int blockPerGrid = div_ceil(size / vector_size, blockSize);
     dim3 threadsPerBlock(blockSize, 1);
     dim3 blocksPerGrid(blockPerGrid);
 
     TIME(blocksPerGrid, threadsPerBlock, 0, 0, false,
-        CANARD_KERNEL_NAME(calc_fluxes_pre_compute_kernel<EnableViscous>),
+        CANARD_KERNEL_NAME(calc_fluxes_pre_compute_kernel<EnableViscous, vector_size>),
         buffer, qa, pressure, de, xim, etm, zem, stress_tensor, heat_fluxes, umf, size);
 }
 
@@ -126,13 +127,14 @@ void calc_viscous_shear_stress_post_compute(
                                             t_dcomp dcomp_info,
                                             cudaStream_t *stream)
 {
+    constexpr int vector_size = 4;
     unsigned int blockSize = 256;
-    unsigned int blockPerGrid = div_ceil(dcomp_info.lmx, blockSize);
+    unsigned int blockPerGrid = div_ceil(dcomp_info.lmx / vector_size, blockSize);
     dim3 threadsPerBlock(blockSize, 1);
     dim3 blocksPerGrid(blockPerGrid);
 
     TIME(blocksPerGrid, threadsPerBlock, 0, *stream, true,
-        CANARD_KERNEL_NAME(calc_viscous_shear_stress_post_compute_kernel<VariableId>),
+        CANARD_KERNEL_NAME(calc_viscous_shear_stress_post_compute_kernel<VariableId, vector_size>),
         stress_tensor, heat_fluxes, buffer_ss0, buffer_ss1, buffer_ss2,
         buffer, xim, etm, zem, dcomp_info.lmx);
 }
