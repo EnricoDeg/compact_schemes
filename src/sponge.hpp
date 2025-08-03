@@ -31,6 +31,7 @@
 #define CANARD_SPONGE_HPP
 
 #include "common/parameters.hpp"
+#include "common/nvtx_utils.hpp"
 
 #include "cuda/common.hpp"
 #include "cuda/kernels/sponge.hpp"
@@ -125,6 +126,8 @@ struct sponge
 
     void go(Type *qa, Type *de, unsigned int lmx)
     {
+        std::string function_name  = "spongego";
+        NVTX_RANGE(function_name.c_str());
         unsigned int blockSize = 256;
         unsigned int blockPerGrid = div_ceil(lsz + 1, blockSize);
         dim3 threadsPerBlock(blockSize, 1);

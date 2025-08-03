@@ -172,6 +172,8 @@ struct physics_base
         timf = timf_node.as<float>();
         YAML::Node nsmf_node = physics_yaml[6]["nsmf"];
         nsmf = nsmf_node.as<bool>();
+        YAML::Node cfl_node = physics_yaml[7]["cfl"];
+        cfl = cfl_node.as<float>();
     }
 
     void movef(Type dtko, Type dtk, Type timo)
@@ -221,6 +223,7 @@ struct physics_base
     Type sqrtrema;
     Type sqrtremai;
     Type timf;
+    Type cfl;
     bool nsmf;
     t_point<Type> uoo;
 };

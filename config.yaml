@@ -1,13 +1,17 @@
 driver:
   - nblocks: 0
   - nts: 0
-  - output_enabled: true
+  - ndata: 3
+  - tmax: 0.1
+  - dt: 0.01
+  - output_enabled: false
+  - dt_fixed: true
 domdcomp:
   - nbpc: [1, 1, 1]
   - lximb: [63]
   - letmb: [63]
   - lzemb: [63]
-  - nbbc: [10, 10, 10, 10, 10, 10]
+  - nbbc: [10, 10, 0, 10, 10, 0]
   - mbcd: [-1, -1, -1, -1, -1, -1]
 grid:
   - doml0: 0.5
@@ -24,5 +28,6 @@ physics:
   - tempoo: 300.0
   - timf: 0.0
   - nsmf: false
+  - cfl: 0.95
 sponge:
   - szco: 10.0

@@ -64,6 +64,7 @@ struct physics : public physics_base<EnableViscous, Type>
     using Base::stress_tensor;
     using Base::heat_fluxes;
     using Base::umf;
+    using Base::cfl;
     using Base::movef;
 
     physics(t_dcomp dcomp_info) : physics_base<EnableViscous, Type>(dcomp_info)
@@ -238,7 +239,6 @@ struct physics : public physics_base<EnableViscous, Type>
                         Type * de,
                         Type * yaco,
                         Type * ssk,
-                        Type   cfl,
                         Type * dte,
                         unsigned int size)
     {

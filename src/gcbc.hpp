@@ -33,6 +33,7 @@
 #include "common/data_types.hpp"
 #include "common/parameters.hpp"
 #include "common/utils.hpp"
+#include "common/nvtx_utils.hpp"
 
 #include "host/functional.hpp"
 #include "host/transforms.hpp"
@@ -210,6 +211,9 @@ struct gcbc
             int nbc[2][3],
             int mcd[2][3])
     {
+        std::string function_name  = "gcbc_go";
+        NVTX_RANGE(function_name.c_str());
+
         // Preparation for GCBC & GCIC
         unsigned int dim;
         Type *drva, *cm, *drvb;
@@ -330,6 +334,8 @@ struct gcbc
                            t_dcomp dcomp_info,
                            int nbc[2][3])
     {
+        std::string function_name  = "wall_condition_go";
+        NVTX_RANGE(function_name.c_str());
         auto wall_bc_instance = wall_bc_dispatch<Type, TypeIndex>(qa, npex, umf, dcomp_info);
         unsigned int dim;
         host::static_for<0, 3, 1>{}([&](auto nn)

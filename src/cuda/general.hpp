@@ -32,6 +32,7 @@
 
 #include "common/parameters.hpp"
 #include "common/utils.hpp"
+#include "common/nvtx_utils.hpp"
 
 #include "cuda/common.hpp"
 #include "cuda/kernels/general.hpp"
@@ -44,6 +45,9 @@ void init_main_loop(Type *qa,
                     Type *qo,
                     unsigned int size)
 {
+    std::string function_name  = "init_main_loop";
+    NVTX_RANGE(function_name.c_str());
+
     unsigned int blockSize = 256;
     unsigned int blockPerGrid = div_ceil(size, blockSize);
     dim3 threadsPerBlock(blockSize, 1);
@@ -63,6 +67,9 @@ void init_runge_kutta(Type *de,
                       Type srefoo,
                       unsigned int size)
 {
+    std::string function_name  = "init_runge_kutta";
+    NVTX_RANGE(function_name.c_str());
+
     unsigned int blockSize = 256;
     unsigned int blockPerGrid = div_ceil(size, blockSize);
     dim3 threadsPerBlock(blockSize, 1);
@@ -81,6 +88,9 @@ void update_conservative_variables(Type *qa,
                                    Type dtk,
                                    unsigned int size)
 {
+    std::string function_name  = "update_conservative_variables";
+    NVTX_RANGE(function_name.c_str());
+
     unsigned int blockSize = 256;
     unsigned int blockPerGrid = div_ceil(size, blockSize);
     dim3 threadsPerBlock(blockSize, 1);
