@@ -289,7 +289,7 @@ CANARD_GLOBAL void gcbc_setup_kernel(Type * cm,
         stride = dcomp_info.let * dcomp_info.lxi;
     }
     unsigned int face_stride = get_face_stride<Axis>(dcomp_info);
-    unsigned int face_idx = blockIdx.y * face_stride + blockIdx.x;
+    unsigned int face_idx = blockIdx.x * face_stride + threadIdx.x;
     unsigned int face_size = get_face_size<Axis>(dcomp_info);
 
     int thread_idx = blockIdx.x * block_stride + threadIdx.x * thread_stride;
@@ -351,6 +351,7 @@ CANARD_GLOBAL void gcbc_update_non_reflective_kernel(Type * cm,
                                                      t_point<Type> umf,
                                                      unsigned int face_id,
                                                      unsigned int face_offset,
+                                                     unsigned int gcbc_offset,
                                                      t_dcomp dcomp_info)
 {
     Type * qa0 = qa;
@@ -381,11 +382,12 @@ CANARD_GLOBAL void gcbc_update_non_reflective_kernel(Type * cm,
         stride = dcomp_info.let * dcomp_info.lxi;
     }
     unsigned int face_stride = get_face_stride<Axis>(dcomp_info);
-    unsigned int face_idx = blockIdx.y * face_stride + blockIdx.x;
+    unsigned int face_idx = blockIdx.x * face_stride + threadIdx.x;
     unsigned int face_size = get_face_size<Axis>(dcomp_info);
 
     int thread_idx = blockIdx.x * block_stride + threadIdx.x * thread_stride;
     int idx = thread_idx + face_offset * stride;
+    int idx_sbcc = (blockIdx.x * blockDim.x + threadIdx.x) * (mbci + 1) + gcbc_offset;
 
     // load cm to vgpr
     Type cm_vgpr[NumberOfSpatialDims];
@@ -441,13 +443,15 @@ CANARD_GLOBAL void gcbc_update_non_reflective_kernel(Type * cm,
 
     // update de
     unsigned int out_idx;
+    unsigned int offset;
     int iq = 1 - 2 * face_id;
-    for(unsigned int ii = 0; ii < mbci; ++ii)
+    for(unsigned int ii = 0; ii <= mbci; ++ii)
     {
         out_idx = idx + ii * iq * stride;
+        offset  = idx_sbcc + ii;
         for(unsigned int variable_id = 0; variable_id < NumberOfVariables; ++variable_id)
         {
-            de[out_idx] += sbcc[out_idx] * drva_vgpr[variable_id];
+            de[out_idx] += sbcc[offset] * drva_vgpr[variable_id];
             out_idx += variable_id * dcomp_info.lmx;
         }
     }

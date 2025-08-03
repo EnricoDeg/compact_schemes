@@ -99,7 +99,8 @@ struct gcbc_dispatch
 
     template<unsigned int Axis>
     void update_non_reflective(unsigned int face_id,
-                               unsigned int face_offset)
+                               unsigned int face_offset,
+                               unsigned int gcbc_offset)
     {
         unsigned int blockSize;
         unsigned int blockPerGrid;
@@ -122,7 +123,8 @@ struct gcbc_dispatch
         dim3 blocksPerGrid(blockPerGrid);
         TIME(blocksPerGrid, threadsPerBlock, 0, 0, false,
             CANARD_KERNEL_NAME(gcbc_update_non_reflective_kernel<Axis>),
-            cm, drva, qa, de, pressure, sbcc, umf, face_id, face_offset, dcomp_info);
+            cm, drva, qa, de, pressure, sbcc, umf, face_id, face_offset,
+            gcbc_offset, dcomp_info);
     }
 
     template<unsigned int Axis>

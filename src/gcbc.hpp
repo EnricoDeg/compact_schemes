@@ -70,43 +70,43 @@ struct gcbc
         Type *yaco_h = (Type *)malloc((domdcomp_instance.lmx+1) * sizeof(Type));
         memcpy_cuda_d2h(yaco_h, yaco, domdcomp_instance.lmx + 1);
 
-        Type cbca[mbci][mbci];
-        Type cbcs[mbci][mbci];
-        Type rbci[mbci];
+        // Type cbca[mbci][mbci];
+        // Type cbcs[mbci][mbci];
+        // Type rbci[mbci];
         Type sbci[mbci];
 
-        for(unsigned int i = 0; i < mbci; ++i)
-        {
-            for(unsigned int j = 0; j < mbci; ++j)
-            {
-                cbca[i][j] = 0.0;
-            }
-        }
-        cbca[0][0] = alpha01;
-        cbca[1][0] = 1.0;
-        cbca[1][1] = alpha10;
-        cbca[2][0] = alpha;
-        cbca[2][1] = 1.0;
-        cbca[2][2] = alpha;
+        // for(unsigned int i = 0; i < mbci; ++i)
+        // {
+        //     for(unsigned int j = 0; j < mbci; ++j)
+        //     {
+        //         cbca[i][j] = 0.0;
+        //     }
+        // }
+        // cbca[0][0] = alpha01;
+        // cbca[1][0] = 1.0;
+        // cbca[1][1] = alpha10;
+        // cbca[2][0] = alpha;
+        // cbca[2][1] = 1.0;
+        // cbca[2][2] = alpha;
 
-        for(unsigned int i = 0; i < mbci; ++i)
-        {
-            rbci[i] = 0.0;
-        }
-        rbci[0] = 1.0;
-        rbci[1] = alpha10;
-        mtrxi(&cbca[0][0], &cbcs[0][0], mbci*mbci);
-        matvecmul(&cbcs[0][0], &rbci[0], &sbci[0], mbci);
-        for(unsigned int i = 0; i < mbci; ++i)
-        {
-            sbci[i] *= -1.0;
-        }
+        // for(unsigned int i = 0; i < mbci; ++i)
+        // {
+        //     rbci[i] = 0.0;
+        // }
+        // rbci[0] = 1.0;
+        // rbci[1] = alpha10;
+        // mtrxi(&cbca[0][0], &cbcs[0][0], mbci*mbci);
+        // matvecmul(&cbcs[0][0], &rbci[0], &sbci[0], mbci);
+        // for(unsigned int i = 0; i < mbci; ++i)
+        // {
+        //     sbci[i] *= -1.0;
+        // }
         Type fctr = pi / ( mbci + 1 );
         Type res = 0.0;
         for(unsigned int i = 0; i < mbci; ++i)
         {
             res = res + 1.0;
-            sbci[i] = 0.5 * sbci[i] * (1.0 + std::cos(res * fctr));
+            sbci[i] = 0.5 * (1.0 + std::cos(res * fctr));
         }
 
         int ll = -1;
@@ -151,7 +151,7 @@ struct gcbc
                                     domdcomp_instance.lxi, domdcomp_instance.let);
                                 ll++;
                                 rr_h[l] += 1.0;
-                                rr_h[ll + 1 * (domdcomp_instance.lmx + 1)] = res * sbci[ii];
+                                rr_h[ll + 1 * (domdcomp_instance.lmx + 1)] = res * sbci[ii-1];
                                 rr_h[ll + 2 * (domdcomp_instance.lmx + 1)] = l + sml;
                             }
                         }
@@ -183,7 +183,7 @@ struct gcbc
         {
             int l = rr_h[ll + 2 * (domdcomp_instance.lmx + 1)];
             sbcc_h[ll] = rr_h[ll + 1 * (domdcomp_instance.lmx + 1)] /
-                         rr_h[ll + 0 * (domdcomp_instance.lmx + 1)];
+                         rr_h[l  + 0 * (domdcomp_instance.lmx + 1)];
         }
         sbcc = allocate_cuda<Type>(lq + 1);
         memcpy_cuda_h2d(sbcc, sbcc_h, lq + 1);
@@ -244,7 +244,7 @@ struct gcbc
                     unsigned int flag = ( BC_WALL_INVISCID - np ) *
                                         ( BC_WALL_VISCOUS  - np ) *
                                         ( BC_INTER_CURV    - np ) / 3000;
-                    unsigned int face_offset = ip * dim;
+                    unsigned int face_offset = ip * (dim - 1);
                     gcbc_instance.template setup<nn>(ip, face_offset, flag);
                 }
             }
@@ -277,6 +277,8 @@ struct gcbc
         });
         exchange_instance.reset();
 
+        unsigned int gcbc_offset = 0;
+
         // Implementation of GCBC & GCIC
         host::static_for<0, NumberOfSpatialDims, 1>{}([&](auto nn)
         {
@@ -286,21 +288,38 @@ struct gcbc
             cm   = cm_buffer[nn];
             gcbc_instance.reset_buffer_pointer(drva, drvb, cm);
 
+            unsigned int face_size;
+            if constexpr(nn == 0)
+            {
+                face_size = dcomp_info.let * dcomp_info.lze;
+            }
+            else if constexpr(nn == 1)
+            {
+                face_size = dcomp_info.lxi * dcomp_info.lze;
+            }
+            else if constexpr(nn == 2)
+            {
+                face_size = dcomp_info.lxi * dcomp_info.let;
+            }
+
             for(unsigned int ip = 0; ip < 2; ++ip)
             {
                 const unsigned int np = nbc[ip][nn];
-                unsigned int face_offset = ip * dim;
+                unsigned int face_offset = ip * (dim - 1);
                 if(np == BC_NON_REFLECTIVE)
                 {
-                    gcbc_instance.template update_non_reflective<nn>(ip, face_offset);
+                    gcbc_instance.template update_non_reflective<nn>(ip, face_offset, gcbc_offset);
+                    gcbc_offset += face_size;
                 }
                 else if(np == BC_WALL_INVISCID || np == BC_WALL_VISCOUS)
                 {
                     gcbc_instance.template update_wall<nn>(ip, face_offset, dtwi);
+                    gcbc_offset += face_size;
                 }
                 else if(np == BC_INTER_CURV)
                 {
                     gcbc_instance.template update_inter_curv<nn>(ip, face_offset);
+                    gcbc_offset += face_size;
                 }
             }
         });

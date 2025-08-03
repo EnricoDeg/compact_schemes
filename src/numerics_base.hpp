@@ -80,7 +80,8 @@ struct numerics_base
                 if(nbck == BC_NON_REFLECTIVE ||
                    nbck == BC_WALL_INVISCID  ||
                    nbck == BC_WALL_VISCOUS   ||
-                   nbck == BC_INTER_CURV     )
+                   nbck == BC_INTER_CURV     ||
+                   nbck == BC_NONE           )
                 {
                     ndf[ip][nn] = 0;
                 }

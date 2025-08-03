@@ -49,6 +49,7 @@ static constexpr unsigned int NumberOfSpatialDims = 3;
 static constexpr unsigned int NumberOfFaces = 2;
 
 // boundary contidions
+static constexpr int BC_NONE             = 0;
 static constexpr int BC_NON_REFLECTIVE   = 10;
 static constexpr int BC_WALL_INVISCID    = 20;
 static constexpr int BC_WALL_VISCOUS     = 25;
